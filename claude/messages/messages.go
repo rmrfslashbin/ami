@@ -340,6 +340,9 @@ func (messages *Messages) Load() error {
 }
 
 func (messages *Messages) Save() error {
+	if messages.conversationFqpn == nil {
+		return nil
+	}
 	// Create the file
 	file, err := os.Create(*messages.conversationFqpn)
 	if err != nil {
