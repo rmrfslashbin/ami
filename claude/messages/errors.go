@@ -178,3 +178,48 @@ func (e *ErrMissingModel) Error() string {
 	}
 	return e.Msg
 }
+
+type ErrOpeningFile struct {
+	Err error
+	Msg string
+}
+
+func (e *ErrOpeningFile) Error() string {
+	if e.Msg != "" {
+		e.Msg = "error opening file"
+	}
+	if e.Err != nil {
+		return e.Msg + ": " + e.Err.Error()
+	}
+	return e.Msg
+}
+
+type ErrLoadingGOB struct {
+	Err error
+	Msg string
+}
+
+func (e *ErrLoadingGOB) Error() string {
+	if e.Msg != "" {
+		e.Msg = "error loading GOB"
+	}
+	if e.Err != nil {
+		return e.Msg + ": " + e.Err.Error()
+	}
+	return e.Msg
+}
+
+type ErrSavingGOB struct {
+	Err error
+	Msg string
+}
+
+func (e *ErrSavingGOB) Error() string {
+	if e.Msg != "" {
+		e.Msg = "error saving GOB"
+	}
+	if e.Err != nil {
+		return e.Msg + ": " + e.Err.Error()
+	}
+	return e.Msg
+}

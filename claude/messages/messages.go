@@ -2,14 +2,16 @@ package messages
 
 import (
 	"encoding/base64"
+	"encoding/gob"
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"slices"
+	"time"
 
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/rmrfslashbin/ami/claude"
-	"github.com/rmrfslashbin/ami/claude/state"
 )
 
 // URL is the URL for the Messages API.
@@ -30,8 +32,9 @@ type Option func(config *Messages)
 
 // Messages is the messages configuration.
 type Messages struct {
-	claud *claude.Claude
-	state *state.State
+	claud            *claude.Claude
+	conversation     *Conversation
+	conversationFqpn *string
 
 	// Model is the model that will complete your prompt.
 	// Required.
@@ -79,6 +82,11 @@ type Messages struct {
 func New(opts ...func(*Messages)) (*Messages, error) {
 	config := &Messages{}
 
+	config.conversation = &Conversation{}
+	now := time.Now()
+	config.conversation.Created = now
+	config.conversation.Updated = now
+
 	// apply the list of options to Config
 	for _, opt := range opts {
 		opt(config)
@@ -92,25 +100,19 @@ func New(opts ...func(*Messages)) (*Messages, error) {
 		return nil, &ErrMissingModel{}
 	}
 
-	// Stream is not supported yet; always set to false.
-	config.Stream = false
-
-	if config.state != nil {
-		for _, message := range config.state.Conversation.Messages {
-			config.Messages = append(
-				config.Messages,
-				&Message{
-					Role: message.Role,
-					MessageContent: []*Content{
-						{
-							Type: "text",
-							Text: message.Content,
-						},
-					},
-				},
-			)
+	if config.conversationFqpn != nil {
+		err := config.Load()
+		if err != nil {
+			return nil, err
 		}
 	}
+
+	if config.conversation.Model == nil {
+		config.conversation.Model = config.Model
+	}
+
+	// Stream is not supported yet; always set to false.
+	config.Stream = false
 
 	return config, nil
 }
@@ -119,6 +121,17 @@ func New(opts ...func(*Messages)) (*Messages, error) {
 func WithClaude(claud *claude.Claude) Option {
 	return func(config *Messages) {
 		config.claud = claud
+	}
+}
+
+func WithConversationFile(fpqn *string) Option {
+	if fpqn != nil {
+		return func(config *Messages) {
+			config.conversationFqpn = fpqn
+		}
+	}
+	return func(config *Messages) {
+		config.conversation = &Conversation{}
 	}
 }
 
@@ -149,12 +162,6 @@ func WithMaxTokens(n int) Option {
 	}
 }
 
-func WithState(state *state.State) Option {
-	return func(config *Messages) {
-		config.state = state
-	}
-}
-
 // Streaming activates streaming mode.
 // Streaming mode is not supported yet.
 func (messages *Messages) Streaming() error {
@@ -180,35 +187,38 @@ func (messages *Messages) SetSystemPrompt(p string) {
 }
 
 func (messages *Messages) AddRoleAssistant(content string) {
-	newMessage := &Message{
-		Role: "assistant",
-		MessageContent: []*Content{
-			{
-				Type: "text",
-				Text: content,
+	messages.conversation.Messages = append(
+		messages.conversation.Messages,
+		&Message{
+			Role: "assistant",
+			MessageContent: []*Content{
+				{
+					Type: "text",
+					Text: content,
+				},
 			},
 		},
-	}
-	messages.Messages = append(messages.Messages, newMessage)
-	if messages.state != nil {
-		messages.state.Conversation.Messages = append(messages.state.Conversation.Messages, &state.Message{Role: string(state.Assistant), Content: content})
-	}
+	)
 }
 
 func (messages *Messages) AddRoleUser(content string) {
-	newMessage := &Message{
-		Role: "user",
-		MessageContent: []*Content{
-			{
-				Type: "text",
-				Text: content,
+	/*
+		newMessage :=
+		messages.Messages = append(messages.Messages, newMessage)
+	*/
+
+	messages.conversation.Messages = append(
+		messages.conversation.Messages,
+		&Message{
+			Role: "user",
+			MessageContent: []*Content{
+				{
+					Type: "text",
+					Text: content,
+				},
 			},
 		},
-	}
-	messages.Messages = append(messages.Messages, newMessage)
-	if messages.state != nil {
-		messages.state.Conversation.Messages = append(messages.state.Conversation.Messages, &state.Message{Role: string(state.User), Content: content})
-	}
+	)
 }
 
 func (messages *Messages) AddRoleUserMedia(fqpn string, prompt string) error {
@@ -229,8 +239,9 @@ func (messages *Messages) AddRoleUserMedia(fqpn string, prompt string) error {
 	// Convert the file content to a base64-encoded string
 	base64Content := base64.StdEncoding.EncodeToString(content)
 
-	messages.Messages = append(
-		messages.Messages, &Message{
+	messages.conversation.Messages = append(
+		messages.conversation.Messages,
+		&Message{
 			Role: "user",
 			MessageContent: []*Content{
 				{
@@ -262,6 +273,9 @@ func (messages *Messages) Send() (*Response, error) {
 		return nil, &ErrUnsupportedOption{Err: errors.New("streaming not supported yet")}
 	}
 
+	// Load the conversation
+	messages.Messages = messages.conversation.Messages
+
 	jsonData, err := json.Marshal(messages)
 	if err != nil {
 		return nil, &ErrMarshalingInput{Err: err}
@@ -278,11 +292,70 @@ func (messages *Messages) Send() (*Response, error) {
 		return nil, &ErrMarshalingReply{Err: err}
 	}
 
-	if messages.state != nil {
-		for _, content := range reply.Content {
-			messages.state.Conversation.Messages = append(messages.state.Conversation.Messages, &state.Message{Role: string(state.Assistant), Content: content.Text})
+	for _, content := range reply.Content {
+		messages.conversation.Messages = append(
+			messages.conversation.Messages,
+			&Message{Role: "assistant", MessageContent: []*Content{{Type: "text", Text: content.Text}}},
+		)
+	}
+
+	// Reset the messages
+	messages.Messages = nil
+
+	return &reply, nil
+}
+
+func (messages *Messages) Load() error {
+	var err error
+	var fqpn string
+	fqpn, err = filepath.Abs(*messages.conversationFqpn)
+	if err != nil {
+		return err
+	}
+	messages.conversationFqpn = &fqpn
+
+	// Check if the file exists
+	_, err = os.Stat(fqpn)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+	} else {
+		// Load the file
+		file, err := os.Open(fqpn)
+		if err != nil {
+			return &ErrOpeningFile{Err: err}
+		}
+		defer file.Close()
+
+		// Decode the GOB data
+		decoder := gob.NewDecoder(file)
+		err = decoder.Decode(messages.conversation)
+		if err != nil {
+			return &ErrLoadingGOB{Err: err}
 		}
 	}
 
-	return &reply, nil
+	return nil
+}
+
+func (messages *Messages) Save() error {
+	// Create the file
+	file, err := os.Create(*messages.conversationFqpn)
+	if err != nil {
+		return &ErrOpeningFile{Err: err}
+	}
+	defer file.Close()
+
+	now := time.Now()
+	messages.conversation.Updated = now
+
+	// Encode the GOB data
+	encoder := gob.NewEncoder(file)
+	err = encoder.Encode(messages.conversation)
+	if err != nil {
+		return &ErrSavingGOB{Err: err}
+	}
+
+	return nil
 }

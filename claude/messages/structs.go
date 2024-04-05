@@ -1,5 +1,25 @@
 package messages
 
+import "time"
+
+// Conversation is a conversation.
+type Conversation struct {
+	// Id is the unique object identifier.
+	Id string `json:"id"`
+
+	// Model is the model used in the conversation.
+	Model *string `json:"model"`
+
+	// Created is the time the conversation was created.
+	Created time.Time `json:"created"`
+
+	// Updated is the time the conversation was updated.
+	Updated time.Time `json:"updated"`
+
+	// Messages is a list of messages in the conversation.
+	Messages []*Message `json:"messages"`
+}
+
 // https://docs.anthropic.com/claude/reference/messages_post
 // Request is the request to send to the Messages API.
 type Request struct {
