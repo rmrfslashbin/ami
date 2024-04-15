@@ -25,6 +25,7 @@ var StopReasons = map[string]string{
 	"end_turn":      "the model reached a natural stopping point",
 	"max_tokens":    "we exceeded the requested max_tokens or the model's maximum",
 	"stop_sequence": "one of your provided custom stop_sequences was generated",
+	"tool_use":      "the model requests use of a tool",
 }
 
 // Option is a configuration option.
@@ -47,6 +48,9 @@ type Messages struct {
 	// Messages is the messages to send to the API.
 	// Required.
 	Messages []*Message `json:"messages"`
+
+	// Tools is an array of tools that the model may use.
+	Tools []*Tool `json:"tools,omitempty"`
 
 	// System is a system prompt is a way of providing context and instructions to Claude, such as specifying a particular goal or role.
 	System string `json:"system,omitempty"`
@@ -257,6 +261,9 @@ func (messages *Messages) AddRoleUserMedia(fqpn string, prompt string) error {
 		},
 	)
 	return nil
+}
+
+func (messages *Messages) AddTool(tool *Tool) {
 }
 
 func (messages *Messages) Send() (*Response, error) {

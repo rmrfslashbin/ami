@@ -9,6 +9,7 @@ import (
 
 const MODULE_NAME = "claude"
 const ANTHROPIC_VERSION = "2023-06-01"
+const ANTHROPIC_BETA = "tools-2024-04-04"
 const URL = "https://api.anthropic.com"
 
 // headers:
@@ -69,12 +70,16 @@ type Option func(config *Claude)
 
 // Configuration structure.
 type Claude struct {
-	apikey *string
-	log    *slog.Logger
+	apikey  *string
+	log     *slog.Logger
+	headers map[string]string
 }
 
 func New(opts ...func(*Claude)) (*Claude, error) {
 	config := &Claude{}
+
+	// init headers
+	config.headers = make(map[string]string)
 
 	// apply the list of options to Config
 	for _, opt := range opts {
@@ -85,6 +90,10 @@ func New(opts ...func(*Claude)) (*Claude, error) {
 		return nil, &ErrMissingAPIKey{}
 	}
 
+	config.headers["x-api-key"] = *config.apikey
+	config.headers["content-type"] = "application/json"
+	config.headers["anthropic-version"] = ANTHROPIC_VERSION
+	config.headers["anthropic-beta"] = ANTHROPIC_BETA
 	return config, nil
 }
 
@@ -120,9 +129,10 @@ func (c *Claude) Do(url string, jsonData []byte) (*[]byte, error) {
 		return nil, err
 	}
 
-	req.Header.Set("x-api-key", *c.apikey)
-	req.Header.Set("content-type", "application/json")
-	req.Header.Set("anthropic-version", ANTHROPIC_VERSION)
+	// Set headers
+	for key, value := range c.headers {
+		req.Header.Set(key, value)
+	}
 
 	// Create an HTTP client
 	client := &http.Client{}

@@ -133,6 +133,15 @@ type Response struct {
 	Content []*struct {
 		Type string `json:"type"`
 		Text string `json:"text"`
+
+		// Id is the unique object identifier for a tool_use block.
+		Id string `json:"id"`
+
+		// Input is the input request for a tool_use block.
+		Input string `json:"input"`
+
+		// Name is the name of the tool used in a tool_use block.
+		Name string `json:"name"`
 	} `json:"content"`
 
 	// The model that handled the request.
@@ -158,4 +167,40 @@ type Response struct {
 		// Required.
 		OutputTokens int `json:"output_tokens"`
 	} `json:"usage"`
+}
+
+// Tool defines a tool that the model may use.
+type Tool struct {
+	// Name is the name of the tool.
+	Name string `json:"name"`
+
+	// Description is the optional description of the tool.
+	Description string `json:"description,omitempty"`
+
+	// Input_schema specified the JSON schema for the tool input shape that the model will produce in tool_use output content blocks.
+	InputSchema string `json:"input_schema"`
+}
+
+// ToolReply is the reply from the tool.
+type ToolReply struct {
+	/*
+			{
+		      "type": "tool_use",
+		      "id": "toolu_01A09q90qw90lq917835lq9",
+		      "name": "get_weather",
+		      "input": {"location": "San Francisco, CA", "unit": "celsius"}
+		    }
+	*/
+
+	// Id is the unique object identifier for a tool_use block.
+	Id string `json:"id"`
+
+	// Name is the name of the tool used in a tool_use block.
+	Name string `json:"name"`
+
+	// Input is the input request for a tool_use block.
+	Input string `json:"input"`
+
+	// Type is the type of content.
+	Type string `json:"type"`
 }
