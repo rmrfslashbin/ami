@@ -115,7 +115,7 @@ func New(opts ...func(*Messages)) (*Messages, error) {
 		config.conversation.Model = config.Model
 	}
 
-	// Stream is not supported yet; always set to false.
+	// Stream defaults to false
 	config.Stream = false
 
 	return config, nil
@@ -167,10 +167,9 @@ func WithMaxTokens(n int) Option {
 }
 
 // Streaming activates streaming mode.
-// Streaming mode is not supported yet.
 func (messages *Messages) Streaming() error {
-	//request.Stream = true
-	return &ErrUnsupportedOption{Err: errors.New("streaming not supported yet")}
+	messages.Stream = true
+	return nil
 }
 
 // UserId sets the user id.
@@ -276,10 +275,6 @@ func (messages *Messages) Send() (*Response, error) {
 		return nil, &ErrConflictingOptions{Err: errors.New("top_p and temperature")}
 	}
 
-	if messages.Stream {
-		return nil, &ErrUnsupportedOption{Err: errors.New("streaming not supported yet")}
-	}
-
 	// Load the conversation
 	messages.Messages = messages.conversation.Messages
 
@@ -288,28 +283,37 @@ func (messages *Messages) Send() (*Response, error) {
 		return nil, &ErrMarshalingInput{Err: err}
 	}
 
-	resp, err := messages.claud.Do(URL, jsonData)
-	if err != nil {
-		return nil, err
+	if messages.Stream {
+		_, err := messages.claud.Stream(URL, jsonData)
+		if err != nil {
+			return nil, err
+		}
+		return nil, nil
+	} else {
+
+		resp, err := messages.claud.Do(URL, jsonData)
+		if err != nil {
+			return nil, err
+		}
+
+		var reply Response
+		err = json.Unmarshal(*resp, &reply)
+		if err != nil {
+			return nil, &ErrMarshalingReply{Err: err}
+		}
+
+		for _, content := range reply.Content {
+			messages.conversation.Messages = append(
+				messages.conversation.Messages,
+				&Message{Role: "assistant", MessageContent: []*Content{{Type: "text", Text: content.Text}}},
+			)
+		}
+
+		// Reset the messages
+		messages.Messages = nil
+
+		return &reply, nil
 	}
-
-	var reply Response
-	err = json.Unmarshal(*resp, &reply)
-	if err != nil {
-		return nil, &ErrMarshalingReply{Err: err}
-	}
-
-	for _, content := range reply.Content {
-		messages.conversation.Messages = append(
-			messages.conversation.Messages,
-			&Message{Role: "assistant", MessageContent: []*Content{{Type: "text", Text: content.Text}}},
-		)
-	}
-
-	// Reset the messages
-	messages.Messages = nil
-
-	return &reply, nil
 }
 
 func (messages *Messages) Load() error {

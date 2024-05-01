@@ -1,10 +1,19 @@
 package claude
 
+// path: claude/claude.go
+
 import (
 	"bytes"
+	"context"
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+
+	"github.com/davecgh/go-spew/spew"
+	"github.com/tmaxmax/go-sse"
 )
 
 const MODULE_NAME = "claude"
@@ -159,4 +168,40 @@ func (c *Claude) Do(url string, jsonData []byte) (*[]byte, error) {
 	}
 
 	return &responseBody, nil
+}
+
+func (c *Claude) Stream(url string, jsonData []byte) (*[]byte, error) {
+	log := c.log.With(
+		slog.Group("function_info",
+			slog.String("function", "claude/claude.go/Stream()"),
+		),
+	)
+
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, err
+	}
+
+	// Set headers
+	for key, value := range c.headers {
+		req.Header.Set(key, value)
+	}
+
+	conn := sse.DefaultClient.NewConnection(req)
+
+	conn.SubscribeToAll(func(event sse.Event) {
+		spew.Dump(event)
+	})
+
+	if err := conn.Connect(); err != nil {
+		log.LogAttrs(context.TODO(), slog.LevelError,
+			"error connecting to streaming service",
+			slog.String("error", err.Error()))
+		return nil, err
+	}
+
+	return nil, nil
 }

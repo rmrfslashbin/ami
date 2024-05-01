@@ -201,6 +201,6 @@ type ToolReply struct {
 	// Input is the input request for a tool_use block.
 	Input string `json:"input"`
 
-	// Type is the type of content.
+	// Type is the type of content. Should ne "tool_use".
 	Type string `json:"type"`
 }
