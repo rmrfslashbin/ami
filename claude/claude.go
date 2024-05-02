@@ -132,6 +132,10 @@ func (c *Claude) GetModelMaxOutputTokens(modelName string) int {
 
 }
 
+func (c *Claude) GetHeaders() map[string]string {
+	return c.headers
+}
+
 func (c *Claude) Do(url string, jsonData []byte) (*[]byte, error) {
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
@@ -176,6 +180,8 @@ func (c *Claude) Stream(url string, jsonData []byte) (*[]byte, error) {
 			slog.String("function", "claude/claude.go/Stream()"),
 		),
 	)
+
+	log.LogAttrs(context.TODO(), slog.LevelError, "Streaming!")
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()

@@ -204,3 +204,56 @@ type ToolReply struct {
 	// Type is the type of content. Should ne "tool_use".
 	Type string `json:"type"`
 }
+
+type StreamingMessageResponse struct {
+	MessageStart   *StreamingMessageStart             `json:"message_start"`
+	MessageDelta   *StreamingMessageDelta             `json:"message_delta"`
+	ContentBlock   *StreamingMessageContentBlockDelta `json:"content_block_delta"`
+	MessageStop    *StreamingMessageStop              `json:"message_stop"`
+	StreamingError *StreamingMessageError             `json:"streaming_error"`
+}
+
+type StreamingMessageStart struct {
+	Type    string   `json:"type"`
+	Message Response `json:"message"`
+}
+
+type StreamingMessageDelta struct {
+	Type  string `json:"type"`
+	Delta struct {
+		StopReason   string `json:"stop_reason"`
+		StopSequence string `json:"stop_sequence"`
+	} `json:"delta"`
+	Usage struct {
+		OutputTokens int `json:"output_tokens"`
+	}
+}
+
+type StreamingMessageContentBlockDelta struct {
+	Type  string `json:"type"`
+	Index int    `json:"index"`
+	Delta struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	} `json:"delta"`
+}
+
+type StreamingMessageStop struct {
+	Type  string `json:"type"`
+	Delta struct {
+		StopReason   string `json:"stop_reason"`
+		EndTurn      bool   `json:"end_turn"`
+		StopSequence string `json:"stop_sequence"`
+	} `json:"delta"`
+	Usage struct {
+		OutputTokens int `json:"output_tokens"`
+	}
+}
+
+type StreamingMessageError struct {
+	Type  string `json:"type"`
+	Error struct {
+		Type    string `json:"type"`
+		Message string `json:"message"`
+	} `json:"error"`
+}

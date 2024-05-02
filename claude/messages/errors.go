@@ -223,3 +223,18 @@ func (e *ErrSavingGOB) Error() string {
 	}
 	return e.Msg
 }
+
+type ErrStreamingMessage struct {
+	Err error
+	Msg string
+}
+
+func (e *ErrStreamingMessage) Error() string {
+	if e.Msg != "" {
+		e.Msg = "error streaming message"
+	}
+	if e.Err != nil {
+		return e.Msg + ": " + e.Err.Error()
+	}
+	return e.Msg
+}

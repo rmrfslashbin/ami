@@ -1,10 +1,13 @@
 package messages
 
 import (
+	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/gob"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -12,6 +15,7 @@ import (
 
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/rmrfslashbin/ami/claude"
+	"github.com/tmaxmax/go-sse"
 )
 
 // URL is the URL for the Messages API.
@@ -36,6 +40,7 @@ type Messages struct {
 	claud            *claude.Claude
 	conversation     *Conversation
 	conversationFqpn *string
+	url              string
 
 	// Model is the model that will complete your prompt.
 	// Required.
@@ -65,9 +70,7 @@ type Messages struct {
 	// StopSequences is a list of strings that, if generated, will cause the model to stop generating tokens.
 	StopSequences []string `json:"stop_sequences,omitempty"`
 
-	// Stream is a boolean that indicates whether the model should generate a single response or a stream of responses.
-	// Default is false.
-	Stream bool `json:"stream"`
+	Streaming bool `json:"stream"`
 
 	// Temperature is a float that controls the randomness of the model's output. The higher the temperature, the more random the output.
 	Temperature *float32 `json:"temperature,omitempty"`
@@ -90,6 +93,7 @@ func New(opts ...func(*Messages)) (*Messages, error) {
 	now := time.Now()
 	config.conversation.Created = now
 	config.conversation.Updated = now
+	config.url = URL
 
 	// apply the list of options to Config
 	for _, opt := range opts {
@@ -114,9 +118,6 @@ func New(opts ...func(*Messages)) (*Messages, error) {
 	if config.conversation.Model == nil {
 		config.conversation.Model = config.Model
 	}
-
-	// Stream defaults to false
-	config.Stream = false
 
 	return config, nil
 }
@@ -166,10 +167,8 @@ func WithMaxTokens(n int) Option {
 	}
 }
 
-// Streaming activates streaming mode.
-func (messages *Messages) Streaming() error {
-	messages.Stream = true
-	return nil
+func (messages *Messages) SetStreaming() {
+	messages.Streaming = true
 }
 
 // UserId sets the user id.
@@ -265,6 +264,118 @@ func (messages *Messages) AddRoleUserMedia(fqpn string, prompt string) error {
 func (messages *Messages) AddTool(tool *Tool) {
 }
 
+type StreamResults struct {
+	Response <-chan StreamingMessageResponse
+	Error    <-chan error
+}
+
+func (messages *Messages) Stream(ctx context.Context) StreamResults {
+	responseCh := make(chan StreamingMessageResponse)
+	errCh := make(chan error)
+
+	if *messages.MaxTokens > messages.modelMaxTokens {
+		errCh <- &ErrMaxTokensExceeded{Model: *messages.Model, MaxTokens: *messages.MaxTokens}
+		close(responseCh)
+		return StreamResults{Response: responseCh, Error: errCh}
+	}
+
+	if messages.TopP != nil && messages.Temperature != nil {
+		errCh <- &ErrConflictingOptions{Err: errors.New("top_p and temperature")}
+		close(responseCh)
+		return StreamResults{Response: responseCh, Error: errCh}
+	}
+
+	// Load the conversation
+	messages.Messages = messages.conversation.Messages
+
+	jsonData, err := json.Marshal(messages)
+	if err != nil {
+		errCh <- &ErrMarshalingInput{Err: err}
+		close(responseCh)
+		return StreamResults{Response: responseCh, Error: errCh}
+	}
+
+	go func() {
+		defer close(responseCh)
+
+		//ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		//defer cancel()
+
+		req, err := http.NewRequestWithContext(ctx, "POST", messages.url, bytes.NewBuffer(jsonData))
+		if err != nil {
+			errCh <- err
+			return
+		}
+
+		// Set headers
+		for key, value := range messages.claud.GetHeaders() {
+			req.Header.Set(key, value)
+		}
+
+		conn := sse.DefaultClient.NewConnection(req)
+
+		conn.SubscribeEvent("message_start", func(event sse.Event) {
+			var response StreamingMessageStart
+			err := json.Unmarshal([]byte(event.Data), &response)
+			if err != nil {
+				errCh <- &ErrMarshalingReply{Err: err}
+				return
+			}
+			responseCh <- StreamingMessageResponse{MessageStart: &response}
+		})
+		conn.SubscribeEvent("content_block_delta", func(event sse.Event) {
+			var response StreamingMessageContentBlockDelta
+			err := json.Unmarshal([]byte(event.Data), &response)
+			if err != nil {
+				errCh <- &ErrMarshalingReply{Err: err}
+				return
+			}
+			responseCh <- StreamingMessageResponse{ContentBlock: &response}
+		})
+
+		conn.SubscribeEvent("message_delta", func(event sse.Event) {
+			var response StreamingMessageStop
+			err := json.Unmarshal([]byte(event.Data), &response)
+			if err != nil {
+				errCh <- &ErrMarshalingReply{Err: err}
+				return
+			}
+			responseCh <- StreamingMessageResponse{MessageStop: &response}
+			close(responseCh)
+		})
+
+		conn.SubscribeEvent("error", func(event sse.Event) {
+			var response StreamingMessageError
+			err := json.Unmarshal([]byte(event.Data), &response)
+			if err != nil {
+				errCh <- &ErrMarshalingReply{Err: err}
+				return
+			}
+			responseCh <- StreamingMessageResponse{StreamingError: &response}
+			errCh <- &ErrStreamingMessage{}
+		})
+
+		// noops for now
+		conn.SubscribeEvent("ping", func(event sse.Event) {})
+		conn.SubscribeEvent("content_block_start", func(event sse.Event) {})
+		conn.SubscribeEvent("content_block_stop", func(event sse.Event) {})
+		conn.SubscribeEvent("message_stop", func(event sse.Event) {})
+
+		if err := conn.Connect(); err != nil {
+			/*
+				log.LogAttrs(context.TODO(), slog.LevelError,
+					"error connecting to streaming service",
+					slog.String("error", err.Error()))
+			*/
+			errCh <- err
+			return
+		}
+
+	}()
+
+	return StreamResults{Response: responseCh, Error: errCh}
+}
+
 func (messages *Messages) Send() (*Response, error) {
 
 	if *messages.MaxTokens > messages.modelMaxTokens {
@@ -282,38 +393,28 @@ func (messages *Messages) Send() (*Response, error) {
 	if err != nil {
 		return nil, &ErrMarshalingInput{Err: err}
 	}
-
-	if messages.Stream {
-		_, err := messages.claud.Stream(URL, jsonData)
-		if err != nil {
-			return nil, err
-		}
-		return nil, nil
-	} else {
-
-		resp, err := messages.claud.Do(URL, jsonData)
-		if err != nil {
-			return nil, err
-		}
-
-		var reply Response
-		err = json.Unmarshal(*resp, &reply)
-		if err != nil {
-			return nil, &ErrMarshalingReply{Err: err}
-		}
-
-		for _, content := range reply.Content {
-			messages.conversation.Messages = append(
-				messages.conversation.Messages,
-				&Message{Role: "assistant", MessageContent: []*Content{{Type: "text", Text: content.Text}}},
-			)
-		}
-
-		// Reset the messages
-		messages.Messages = nil
-
-		return &reply, nil
+	resp, err := messages.claud.Do(messages.url, jsonData)
+	if err != nil {
+		return nil, err
 	}
+
+	var reply Response
+	err = json.Unmarshal(*resp, &reply)
+	if err != nil {
+		return nil, &ErrMarshalingReply{Err: err}
+	}
+
+	for _, content := range reply.Content {
+		messages.conversation.Messages = append(
+			messages.conversation.Messages,
+			&Message{Role: "assistant", MessageContent: []*Content{{Type: "text", Text: content.Text}}},
+		)
+	}
+
+	// Reset the messages
+	messages.Messages = nil
+
+	return &reply, nil
 }
 
 func (messages *Messages) Load() error {
