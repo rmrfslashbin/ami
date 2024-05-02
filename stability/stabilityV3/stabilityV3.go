@@ -58,7 +58,7 @@ type StabilityV3 struct {
 	outputFormat   *string
 }
 
-func NewV3(opts ...func(*StabilityV3)) (*StabilityV3, error) {
+func New(opts ...func(*StabilityV3)) (*StabilityV3, error) {
 	config := &StabilityV3{}
 
 	// apply the list of options to Config

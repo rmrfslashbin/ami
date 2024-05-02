@@ -2,6 +2,7 @@ package stability
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"log/slog"
 	"mime/multipart"
@@ -74,7 +75,7 @@ func (stability *Stability) MakeFormBody() (*bytes.Buffer, *string) {
 
 	for _, part := range stability.formParts {
 		for key, value := range part {
-			writer.WriteField(key, value.(string))
+			writer.WriteField(key, fmt.Sprint(value))
 		}
 	}
 	contentType := writer.FormDataContentType()
