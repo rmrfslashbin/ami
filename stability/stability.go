@@ -2,7 +2,6 @@ package stability
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -84,10 +83,11 @@ func (stability *Stability) MakeFormBody() (*bytes.Buffer, *string) {
 	return body, &contentType
 }
 
-func (stability *Stability) Do(url *string) (*StabilityResponse, error) {
+func (stability *Stability) Do(url *string, httpMethod HttpMethod) (*StabilityResponse, error) {
+	method := string(httpMethod)
 	body, contentType := stability.MakeFormBody()
 
-	req, err := http.NewRequest("POST", *url, body)
+	req, err := http.NewRequest(method, *url, body)
 	if err != nil {
 		return nil, err
 	}
@@ -116,13 +116,8 @@ func (stability *Stability) Do(url *string) (*StabilityResponse, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		errors := &StabilityV3Erors{}
-		if err := json.Unmarshal(responseBody, errors); err != nil {
-			fmt.Println("Error unmarshalling api error response")
-			return nil, err
-		}
 		return &StabilityResponse{
-			Errors: errors,
+			Errors: &responseBody,
 		}, nil
 	}
 

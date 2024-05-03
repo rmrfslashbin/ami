@@ -3,7 +3,7 @@ package stability
 type StabilityResponse struct {
 	Body    []byte
 	Headers map[string][]string
-	Errors  *StabilityV3Erors `json:"errors"`
+	Errors  *[]byte
 }
 
 type StabilityV3Request struct {
@@ -19,7 +19,7 @@ type StabilityV3Request struct {
 type StabilityV3Response struct {
 	Data   *StabilityV3ImageData `json:"data"`
 	Json   *StabilityV3ImageJSON `json:"json"`
-	Errors *StabilityV3Erors     `json:"errors"`
+	Errors *StabilityV3Errors    `json:"errors"`
 }
 
 // StabilityV3ImageData is the response data for the V3 endpoint with image/* accept header
@@ -37,7 +37,39 @@ type StabilityV3ImageJSON struct {
 	Seed         int    `json:"seed"`
 }
 
-type StabilityV3Erors struct {
+type StabilityV3Errors struct {
 	Name   string   `json:"name"`
 	Errors []string `json:"errors"`
+}
+
+type ResponseUser struct {
+	Id             string             `json:"id"`
+	Email          string             `json:"email"`
+	ProfilePicture string             `json:"profile_picture"`
+	Organizations  []ResponseUserOrg  `json:"organizations"`
+	Error          *ResponseUserError `json:"error,omitempty"`
+}
+
+type ResponseUserOrg struct {
+	Id        string `json:"id"`
+	Name      string `json:"name"`
+	Role      string `json:"role"`
+	IsDefault bool   `json:"is_default"`
+}
+
+type ResponseUserError struct {
+	Id      string `json:"id"`
+	Name    string `json:"name"`
+	Message string `json:"message"`
+}
+
+type ResponseUserBalance struct {
+	Credits float64            `json:"credits"`
+	Error   *ResponseUserError `json:"error,omitempty"`
+}
+
+type BalanceInput struct {
+	Organization           *string
+	StabilityClientID      *string
+	StabilityClientVersion *string
 }

@@ -1,4 +1,4 @@
-package stabilityV3
+package sd3
 
 import (
 	"encoding/json"
@@ -205,7 +205,7 @@ func (c *StabilityV3) Generate() (*stability.StabilityV3Response, error) {
 	c.mode = "text-to-image"
 	c.stability.AddFormPart("mode", c.mode)
 
-	res, err := c.stability.Do(&stability.ENDPOINT_V3)
+	res, err := c.stability.Do(&stability.ENDPOINT_V3, stability.METHOD_POST)
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +216,11 @@ func (c *StabilityV3) Generate() (*stability.StabilityV3Response, error) {
 
 	response := &stability.StabilityV3Response{}
 	if res.Errors != nil {
-		response.Errors = res.Errors
+		responseErrors := &stability.StabilityV3Errors{}
+		if err := json.Unmarshal(*res.Errors, responseErrors); err != nil {
+			return nil, err
+		}
+		response.Errors = responseErrors
 		return response, nil
 	}
 

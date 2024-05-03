@@ -1,4 +1,4 @@
-package stabilityV3
+package sd3
 
 import (
 	"fmt"

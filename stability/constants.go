@@ -14,6 +14,7 @@ const MAX_SEED = 4294967294
 // ASPECT_RATIOS is a list of valid aspect ratios
 var ASPECT_RATIOS = []string{"16:9", "1:1", "21:9", "2:3", "3:2", "4:5", "5:4", "9:16", "9:21"}
 
+/*
 // STYLE_PRESETS is a list of valid style presets
 var STYLE_PRESETS = []string{
 	"3d-model", "analog-film", "anime",
@@ -23,6 +24,12 @@ var STYLE_PRESETS = []string{
 	"neon-punk", "origami", "photographic",
 	"pixel-art", "tile-texture",
 }
+*/
+
+type HttpMethod string
+
+var METHOD_POST HttpMethod = "POST"
+var METHOD_GET HttpMethod = "GET"
 
 // STATUS_CODES is a map of status codes to their descriptions
 var STATUS_CODES = map[int]string{
@@ -37,13 +44,11 @@ var STATUS_CODES = map[int]string{
 // ENDPOINT_ROOT is the root endpoint for all requests
 var ENDPOINT_ROOT = "https://api.stability.ai"
 
-// V2 constants
+// ENDPOINT_USER_V1 is the endpoint for V1 user requests
+var ENDPOINT_USER_V1 = ENDPOINT_ROOT + "/v1/user/account"
 
-// ENDPOINT_V2 is the endpoint for V2 requests
-var ENDPOINT_V2 = ENDPOINT_ROOT + "/v2beta/stable-image/generate/core"
-
-// OUTPUT_FORMATS_V2 is a list of valid output formats for V2 endpoints
-var OUTPUT_FORMATS_V2 = []string{"jpeg", "png", "webp"}
+// ENDPOINT_USER_BALANCE_V1 is the endpoint for V1 user balance requests
+var ENDPOINT_USER_BALANCE_V1 = ENDPOINT_ROOT + "/v1/user/balance"
 
 // V3 constants
 
