@@ -1,4 +1,4 @@
-package sd3
+package generate
 
 import (
 	"encoding/json"
@@ -150,7 +150,7 @@ func (c *StabilityV3) SetSeed(seed int) {
 	c.seed = &seed
 }
 
-func (c *StabilityV3) Generate() (*stability.StabilityV3Response, error) {
+func (c *StabilityV3) Generate() (*Response, error) {
 	if c.prompt == nil {
 		return nil, &ErrMissingPrompt{}
 	}
@@ -161,7 +161,7 @@ func (c *StabilityV3) Generate() (*stability.StabilityV3Response, error) {
 		c.aspectRatio = &aspectRatio
 	} else {
 		// validate aspect ratio
-		if !slices.Contains(stability.ASPECT_RATIOS, *c.aspectRatio) {
+		if !slices.Contains(ASPECT_RATIOS, *c.aspectRatio) {
 			return nil, &ErrInvalidAspectRatio{}
 		}
 	}
@@ -172,7 +172,7 @@ func (c *StabilityV3) Generate() (*stability.StabilityV3Response, error) {
 		c.model = &model
 	} else {
 		// validate model
-		if !slices.Contains(stability.MODELS_V3, *c.model) {
+		if !slices.Contains(MODELS, *c.model) {
 			return nil, &ErrInvalidModel{}
 		}
 	}
@@ -183,7 +183,7 @@ func (c *StabilityV3) Generate() (*stability.StabilityV3Response, error) {
 		c.seed = &seed
 	} else {
 		// validate seed
-		if *c.seed < 0 || *c.seed > stability.MAX_SEED {
+		if *c.seed < 0 || *c.seed > MAX_SEED {
 			return nil, &ErrInvalidSeed{}
 		}
 	}
@@ -194,7 +194,7 @@ func (c *StabilityV3) Generate() (*stability.StabilityV3Response, error) {
 		c.outputFormat = &outputFormat
 	} else {
 		// validate output format
-		if !slices.Contains(stability.OUTPUT_FORMATS_V3, *c.outputFormat) {
+		if !slices.Contains(OUTPUT_FORMATS, *c.outputFormat) {
 			return nil, &ErrInvalidOutputFormat{}
 		}
 	}
@@ -205,7 +205,7 @@ func (c *StabilityV3) Generate() (*stability.StabilityV3Response, error) {
 	c.mode = "text-to-image"
 	c.stability.AddFormPart("mode", c.mode)
 
-	res, err := c.stability.Do(&stability.ENDPOINT_V3, stability.METHOD_POST)
+	res, err := c.stability.Do(&ENDPOINT, stability.METHOD_POST)
 	if err != nil {
 		return nil, err
 	}
@@ -214,9 +214,9 @@ func (c *StabilityV3) Generate() (*stability.StabilityV3Response, error) {
 		return nil, &ErrEmptyResponse{}
 	}
 
-	response := &stability.StabilityV3Response{}
+	response := &Response{}
 	if res.Errors != nil {
-		responseErrors := &stability.StabilityV3Errors{}
+		responseErrors := &ResponseErrors{}
 		if err := json.Unmarshal(*res.Errors, responseErrors); err != nil {
 			return nil, err
 		}
@@ -224,28 +224,33 @@ func (c *StabilityV3) Generate() (*stability.StabilityV3Response, error) {
 		return response, nil
 	}
 
-	//spew.Dump(res.Headers)
-
-	if res.Headers["Content-Type"][0] == "application/json" {
-		jsonRes := &stability.StabilityV3ImageJSON{}
-		err = json.Unmarshal(res.Body, jsonRes)
-		if err != nil {
-			return nil, err
-		}
-		response.Json = jsonRes
-		response.Data = nil
-
+	// check if Content-Type header is present
+	if _, ok := res.Headers["Content-Type"]; !ok {
+		return nil, &ErrFetchingReturnHeader{Header: "Content-Type"}
 	} else {
-		imageData := &stability.StabilityV3ImageData{}
-		imageData.ImageData = res.Body
-		imageData.ContextType = res.Headers["Content-Type"][0]
-		imageData.FinishReason = res.Headers["Finish-Reason"][0]
-		seed, _ := strconv.Atoi(res.Headers["Seed"][0])
-		imageData.Seed = seed
-
-		response.Data = imageData
-		response.Json = nil
+		if res.Headers["Content-Type"][0] == "application/json" {
+			return nil, &ErrJsonResponseNotSupported{}
+		}
 	}
+
+	// check if Finish-Reason header is present
+	if _, ok := res.Headers["Finish-Reason"]; !ok {
+		return nil, &ErrFetchingReturnHeader{Header: "Finish-Reason"}
+	}
+
+	// check if Seed header is present
+	if _, ok := res.Headers["Seed"]; !ok {
+		return nil, &ErrFetchingReturnHeader{Header: "Seed"}
+	}
+
+	seed, _ := strconv.Atoi(res.Headers["Seed"][0])
+	metadata := &ResponseMetadata{
+		ContextType:  res.Headers["Content-Type"][0],
+		FinishReason: res.Headers["Finish-Reason"][0],
+		Seed:         seed,
+	}
+	response.Metadata = metadata
+	response.Image = &res.Body
 
 	return response, nil
 }

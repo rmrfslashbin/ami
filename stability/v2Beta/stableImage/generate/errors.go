@@ -1,10 +1,8 @@
-package sd3
+package generate
 
 import (
 	"fmt"
 	"strings"
-
-	"github.com/rmrfslashbin/ami/stability"
 )
 
 type ErrMissingStability struct {
@@ -58,7 +56,7 @@ type ErrInvalidAspectRatio struct {
 }
 
 func (e *ErrInvalidAspectRatio) Error() string {
-	validAspectRatios := strings.Join(stability.ASPECT_RATIOS, ", ")
+	validAspectRatios := strings.Join(ASPECT_RATIOS, ", ")
 	if e.Msg != "" {
 		e.Msg = "invalid aspect ratio- use WithAspectRatio or SetAspectRatio to set it. Must be one of " + validAspectRatios
 	}
@@ -74,7 +72,7 @@ type ErrInvalidModel struct {
 }
 
 func (e *ErrInvalidModel) Error() string {
-	validModels := strings.Join(stability.MODELS_V3, ", ")
+	validModels := strings.Join(MODELS, ", ")
 	if e.Msg != "" {
 		e.Msg = "invalid model- use WithModel or SetModel to set it. Must be one of " + validModels
 	}
@@ -91,7 +89,7 @@ type ErrInvalidSeed struct {
 
 func (e *ErrInvalidSeed) Error() string {
 	if e.Msg != "" {
-		e.Msg = fmt.Sprintf("invalid seed- use WithSeed or SetSeed to set it. Must be between 0 and %d", stability.MAX_SEED)
+		e.Msg = fmt.Sprintf("invalid seed- use WithSeed or SetSeed to set it. Must be between 0 and %d", MAX_SEED)
 	}
 	if e.Err != nil {
 		return e.Msg + ": " + e.Err.Error()
@@ -105,7 +103,7 @@ type ErrInvalidOutputFormat struct {
 }
 
 func (e *ErrInvalidOutputFormat) Error() string {
-	validOutputFormats := strings.Join(stability.OUTPUT_FORMATS_V3, ", ")
+	validOutputFormats := strings.Join(OUTPUT_FORMATS, ", ")
 	if e.Msg != "" {
 		e.Msg = "invalid output format- use WithOutputFormat or SetOutputFormat to set it. Must be one of " + validOutputFormats
 	}
@@ -123,6 +121,40 @@ type ErrEmptyResponse struct {
 func (e *ErrEmptyResponse) Error() string {
 	if e.Msg != "" {
 		e.Msg = "empty response from Stability.Ai"
+	}
+	if e.Err != nil {
+		return e.Msg + ": " + e.Err.Error()
+	}
+	return e.Msg
+}
+
+type ErrJsonResponseNotSupported struct {
+	Err error
+	Msg string
+}
+
+func (e *ErrJsonResponseNotSupported) Error() string {
+	if e.Msg != "" {
+		e.Msg = "json response not supported"
+	}
+	if e.Err != nil {
+		return e.Msg + ": " + e.Err.Error()
+	}
+	return e.Msg
+}
+
+type ErrFetchingReturnHeader struct {
+	Err    error
+	Msg    string
+	Header string
+}
+
+func (e *ErrFetchingReturnHeader) Error() string {
+	if e.Msg != "" {
+		e.Msg = "error fetching return header"
+	}
+	if e.Header != "" {
+		e.Msg = e.Msg + ": " + e.Header
 	}
 	if e.Err != nil {
 		return e.Msg + ": " + e.Err.Error()

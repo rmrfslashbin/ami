@@ -53,10 +53,10 @@ func WithStability(stability *stability.Stability) Option {
 	}
 }
 
-func (c *StableUser) Me() (*stability.ResponseUser, error) {
+func (c *StableUser) Me() (*Response, error) {
 	c.stability.AddHeader("accept", "application/json")
 
-	res, err := c.stability.Do(&stability.ENDPOINT_USER_V1, stability.METHOD_GET)
+	res, err := c.stability.Do(&ENDPOINT_USER, stability.METHOD_GET)
 	if err != nil {
 		return nil, err
 	}
@@ -66,22 +66,24 @@ func (c *StableUser) Me() (*stability.ResponseUser, error) {
 	}
 
 	if res.Errors != nil {
-		errors := &stability.ResponseUserError{}
+		errors := &ResponseUserError{}
 		if err := json.Unmarshal(*res.Errors, errors); err != nil {
 			return nil, err
 		}
-		return &stability.ResponseUser{Error: errors}, nil
+		return &Response{Error: errors}, nil
 	}
 
-	userResponse := &stability.ResponseUser{}
+	userResponse := &ResponseUser{}
 	if err := json.Unmarshal(res.Body, userResponse); err != nil {
 		return nil, err
 	}
 
-	return userResponse, nil
+	return &Response{
+		User: userResponse,
+	}, nil
 }
 
-func (c *StableUser) Balance(input *stability.BalanceInput) (*stability.ResponseUserBalance, error) {
+func (c *StableUser) Balance(input *BalanceInput) (*Response, error) {
 	c.stability.AddHeader("accept", "application/json")
 
 	if input != nil {
@@ -98,7 +100,7 @@ func (c *StableUser) Balance(input *stability.BalanceInput) (*stability.Response
 		}
 	}
 
-	res, err := c.stability.Do(&stability.ENDPOINT_USER_BALANCE_V1, stability.METHOD_GET)
+	res, err := c.stability.Do(&ENDPOINT_USER_BALANCE, stability.METHOD_GET)
 	if err != nil {
 		return nil, err
 	}
@@ -108,17 +110,19 @@ func (c *StableUser) Balance(input *stability.BalanceInput) (*stability.Response
 	}
 
 	if res.Errors != nil {
-		errors := &stability.ResponseUserError{}
+		errors := &ResponseUserError{}
 		if err := json.Unmarshal(*res.Errors, errors); err != nil {
 			return nil, err
 		}
-		return &stability.ResponseUserBalance{Error: errors}, nil
+		return &Response{Error: errors}, nil
 	}
 
-	userBalanceResponse := &stability.ResponseUserBalance{}
+	userBalanceResponse := &ResponseUserBalance{}
 	if err := json.Unmarshal(res.Body, userBalanceResponse); err != nil {
 		return nil, err
 	}
 
-	return userBalanceResponse, nil
+	return &Response{
+		Credits: userBalanceResponse,
+	}, nil
 }
