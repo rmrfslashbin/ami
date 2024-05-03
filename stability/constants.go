@@ -55,8 +55,3 @@ var MODELS_V3 = []string{"sd3", "sd3-turbo"}
 
 // OUTPUT_FORMATS_V3 is a list of valid output formats for V3 endpoints
 var OUTPUT_FORMATS_V3 = []string{"jpeg", "png"}
-
-type ErrorResponse struct {
-	Name   string   `json:"name"`
-	Errors []string `json:"errors"`
-}

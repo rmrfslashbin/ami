@@ -22,7 +22,7 @@ func (e *ErrMissingAPIKey) Error() string {
 type ErrHTTP struct {
 	Err        error
 	Msg        string
-	URL        string
+	Url        string
 	StatusCode int
 }
 
@@ -36,8 +36,8 @@ func (e *ErrHTTP) Error() string {
 	if errorAPIText, ok := STATUS_CODES[e.StatusCode]; ok {
 		e.Msg += fmt.Sprintf(": %s", errorAPIText)
 	}
-	if e.URL != "" {
-		e.Msg += fmt.Sprintf(" for %s", e.URL)
+	if e.Url != "" {
+		e.Msg += fmt.Sprintf(" for %s", e.Url)
 	}
 	if e.Err != nil {
 		return e.Msg + ": " + e.Err.Error()

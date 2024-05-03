@@ -199,7 +199,7 @@ func (c *StabilityV3) Generate() (*stability.StabilityV3Response, error) {
 		}
 	}
 	c.stability.AddFormPart("output_format", *c.outputFormat)
-	c.stability.AddHeader("accept", "image/"+*c.outputFormat)
+	c.stability.AddHeader("accept", "image/*") // hard coded to accept image/* for now (default to png)
 
 	// set default values. Only text-to-image is supported
 	c.mode = "text-to-image"
@@ -215,8 +215,14 @@ func (c *StabilityV3) Generate() (*stability.StabilityV3Response, error) {
 	}
 
 	response := &stability.StabilityV3Response{}
+	if res.Errors != nil {
+		response.Errors = res.Errors
+		return response, nil
+	}
 
-	if res.Headers["content-type"][0] == "application/json" {
+	//spew.Dump(res.Headers)
+
+	if res.Headers["Content-Type"][0] == "application/json" {
 		jsonRes := &stability.StabilityV3ImageJSON{}
 		err = json.Unmarshal(res.Body, jsonRes)
 		if err != nil {
@@ -228,9 +234,9 @@ func (c *StabilityV3) Generate() (*stability.StabilityV3Response, error) {
 	} else {
 		imageData := &stability.StabilityV3ImageData{}
 		imageData.ImageData = res.Body
-		imageData.ContextType = res.Headers["content-type"][0]
-		imageData.FinishReason = res.Headers["finish-reason"][0]
-		seed, _ := strconv.Atoi(res.Headers["seed"][0])
+		imageData.ContextType = res.Headers["Content-Type"][0]
+		imageData.FinishReason = res.Headers["Finish-Reason"][0]
+		seed, _ := strconv.Atoi(res.Headers["Seed"][0])
 		imageData.Seed = seed
 
 		response.Data = imageData

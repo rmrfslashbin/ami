@@ -3,6 +3,7 @@ package stability
 type StabilityResponse struct {
 	Body    []byte
 	Headers map[string][]string
+	Errors  *StabilityV3Erors `json:"errors"`
 }
 
 type StabilityV3Request struct {
@@ -16,8 +17,9 @@ type StabilityV3Request struct {
 }
 
 type StabilityV3Response struct {
-	Data *StabilityV3ImageData `json:"data"`
-	Json *StabilityV3ImageJSON `json:"json"`
+	Data   *StabilityV3ImageData `json:"data"`
+	Json   *StabilityV3ImageJSON `json:"json"`
+	Errors *StabilityV3Erors     `json:"errors"`
 }
 
 // StabilityV3ImageData is the response data for the V3 endpoint with image/* accept header
@@ -33,4 +35,9 @@ type StabilityV3ImageJSON struct {
 	Image        string `json:"image"`
 	FinishReason string `json:"finish_reason"`
 	Seed         int    `json:"seed"`
+}
+
+type StabilityV3Erors struct {
+	Name   string   `json:"name"`
+	Errors []string `json:"errors"`
 }

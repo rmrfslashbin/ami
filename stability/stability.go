@@ -2,6 +2,7 @@ package stability
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -109,14 +110,21 @@ func (stability *Stability) Do(url *string) (*StabilityResponse, error) {
 
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, &ErrHTTP{
-			StatusCode: resp.StatusCode,
-			URL:        *url,
-		}
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
 	}
 
-	responseBody, err := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		errors := &StabilityV3Erors{}
+		if err := json.Unmarshal(responseBody, errors); err != nil {
+			fmt.Println("Error unmarshalling api error response")
+			return nil, err
+		}
+		return &StabilityResponse{
+			Errors: errors,
+		}, nil
+	}
 
 	responseHeaders := map[string][]string{}
 
