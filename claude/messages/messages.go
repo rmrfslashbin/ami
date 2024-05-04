@@ -7,7 +7,6 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -370,7 +369,7 @@ func (messages *Messages) Send() (*Response, error) {
 	if err != nil {
 		return nil, &ErrMarshalingInput{Err: err}
 	}
-	fmt.Println(string(jsonData))
+
 	resp, err := messages.claud.Do(messages.url, jsonData)
 	if err != nil {
 		return nil, err
