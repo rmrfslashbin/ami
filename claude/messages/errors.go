@@ -238,3 +238,18 @@ func (e *ErrStreamingMessage) Error() string {
 	}
 	return e.Msg
 }
+
+type ErrToolUseNotSupported struct {
+	Err error
+	Msg string
+}
+
+func (e *ErrToolUseNotSupported) Error() string {
+	if e.Msg != "" {
+		e.Msg = "tool use not supported with streaming API"
+	}
+	if e.Err != nil {
+		return e.Msg + ": " + e.Err.Error()
+	}
+	return e.Msg
+}

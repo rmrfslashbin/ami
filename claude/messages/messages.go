@@ -7,6 +7,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -42,52 +43,13 @@ type Messages struct {
 	conversationFqpn *string
 	url              string
 
-	// Model is the model that will complete your prompt.
-	// Required.
-	// See models (https://docs.anthropic.com/claude/docs/models-overview) for additional details and options.
-	Model *string `json:"model"`
-
-	// modelMaxTokens is the maximum number of tokens for the model.
-	modelMaxTokens int
-
-	// Messages is the messages to send to the API.
-	// Required.
-	Messages []*Message `json:"messages"`
-
-	// Tools is an array of tools that the model may use.
-	Tools []*Tool `json:"tools,omitempty"`
-
-	// System is a system prompt is a way of providing context and instructions to Claude, such as specifying a particular goal or role.
-	System string `json:"system,omitempty"`
-
-	// MaxToken is the maximum number of tokens to generate before stopping.
-	// Required.
-	MaxTokens *int `json:"max_tokens"`
-
-	// Metadata is an object describing metadata about the request.
-	Metadata *Metadata `json:"metadata,omitempty"`
-
-	// StopSequences is a list of strings that, if generated, will cause the model to stop generating tokens.
-	StopSequences []string `json:"stop_sequences,omitempty"`
-
-	Streaming bool `json:"stream"`
-
-	// Temperature is a float that controls the randomness of the model's output. The higher the temperature, the more random the output.
-	Temperature *float32 `json:"temperature,omitempty"`
-
-	// TopP is an integer that controls nucleus sampling. The higher the top_p, the more diverse the output.
-	// Recommended for advanced use cases only. You usually only need to use temperature.
-	// You should either alter temperature or top_p, but not both.
-	TopP *int `json:"top_p,omitempty"`
-
-	// TopK is an integer that specifies sampling from the top K options for each subsequent token.
-	// Recommended for advanced use cases only. You usually only need to use temperature.
-	TopK *int `json:"top_k,omitempty"`
+	request Request
 }
 
 // New creates a new Messages configuration.
 func New(opts ...func(*Messages)) (*Messages, error) {
 	config := &Messages{}
+	config.request = Request{}
 
 	config.conversation = &Conversation{}
 	now := time.Now()
@@ -104,7 +66,7 @@ func New(opts ...func(*Messages)) (*Messages, error) {
 		return nil, &ErrMissingClaude{}
 	}
 
-	if config.Model == nil {
+	if config.request.Model == "" {
 		return nil, &ErrMissingModel{}
 	}
 
@@ -116,7 +78,7 @@ func New(opts ...func(*Messages)) (*Messages, error) {
 	}
 
 	if config.conversation.Model == nil {
-		config.conversation.Model = config.Model
+		config.conversation.Model = &config.request.Model
 	}
 
 	return config, nil
@@ -155,37 +117,37 @@ func WithHaiku() Option {
 func withModel(model string) Option {
 	return func(config *Messages) {
 		model := claude.ModelsList[model]
-		config.Model = &model.Name
-		config.MaxTokens = &model.MaxOutputTokens
-		config.modelMaxTokens = model.MaxOutputTokens
+		config.request.Model = model.Name
+		config.request.MaxTokens = model.MaxOutputTokens
+		config.request.modelMaxTokens = model.MaxOutputTokens
 	}
 }
 
 func WithMaxTokens(n int) Option {
 	return func(config *Messages) {
-		config.MaxTokens = &n
+		config.request.MaxTokens = n
 	}
 }
 
-func (messages *Messages) SetStreaming() {
-	messages.Streaming = true
+func (messages *Messages) SetStreaming(stream bool) {
+	messages.request.Stream = stream
 }
 
 // UserId sets the user id.
 func (messages *Messages) SetUserId(id string) {
-	messages.Metadata.UserId = id
+	messages.request.Metadata.UserId = id
 }
 
 func (messages *Messages) SetMaxTokens(n int) error {
-	if n > *messages.MaxTokens {
-		return &ErrMaxTokensExceeded{Model: *messages.Model, MaxTokens: *messages.MaxTokens}
+	if n > messages.request.MaxTokens {
+		return &ErrMaxTokensExceeded{Model: messages.request.Model, MaxTokens: messages.request.MaxTokens}
 	}
-	messages.MaxTokens = &n
+	messages.request.MaxTokens = n
 	return nil
 }
 
 func (messages *Messages) SetSystemPrompt(p string) {
-	messages.System = p
+	messages.request.System = p
 }
 
 func (messages *Messages) AddRoleAssistant(content string) {
@@ -262,6 +224,16 @@ func (messages *Messages) AddRoleUserMedia(fqpn string, prompt string) error {
 }
 
 func (messages *Messages) AddTool(tool *Tool) {
+	messages.request.Tools = append(messages.request.Tools, tool)
+}
+
+func (messages *Messages) GetMessageJSON() (*[]byte, error) {
+	jsonData, err := json.Marshal(messages.request)
+	if err != nil {
+		return nil, &ErrMarshalingInput{Err: err}
+	}
+	return &jsonData, nil
+
 }
 
 type StreamResults struct {
@@ -273,22 +245,28 @@ func (messages *Messages) Stream(ctx context.Context) StreamResults {
 	responseCh := make(chan StreamingMessageResponse)
 	errCh := make(chan error)
 
-	if *messages.MaxTokens > messages.modelMaxTokens {
-		errCh <- &ErrMaxTokensExceeded{Model: *messages.Model, MaxTokens: *messages.MaxTokens}
+	if len(messages.request.Tools) > 0 {
+		errCh <- &ErrToolUseNotSupported{}
 		close(responseCh)
 		return StreamResults{Response: responseCh, Error: errCh}
 	}
 
-	if messages.TopP != nil && messages.Temperature != nil {
+	if messages.request.MaxTokens > messages.request.modelMaxTokens {
+		errCh <- &ErrMaxTokensExceeded{Model: messages.request.Model, MaxTokens: messages.request.MaxTokens}
+		close(responseCh)
+		return StreamResults{Response: responseCh, Error: errCh}
+	}
+
+	if messages.request.TopP != nil && messages.request.Temperature != nil {
 		errCh <- &ErrConflictingOptions{Err: errors.New("top_p and temperature")}
 		close(responseCh)
 		return StreamResults{Response: responseCh, Error: errCh}
 	}
 
 	// Load the conversation
-	messages.Messages = messages.conversation.Messages
+	messages.request.Messages = messages.conversation.Messages
 
-	jsonData, err := json.Marshal(messages)
+	jsonData, err := json.Marshal(messages.request)
 	if err != nil {
 		errCh <- &ErrMarshalingInput{Err: err}
 		close(responseCh)
@@ -377,22 +355,22 @@ func (messages *Messages) Stream(ctx context.Context) StreamResults {
 }
 
 func (messages *Messages) Send() (*Response, error) {
-
-	if *messages.MaxTokens > messages.modelMaxTokens {
-		return nil, &ErrMaxTokensExceeded{Model: *messages.Model, MaxTokens: *messages.MaxTokens}
+	if messages.request.MaxTokens > messages.request.modelMaxTokens {
+		return nil, &ErrMaxTokensExceeded{Model: messages.request.Model, MaxTokens: messages.request.MaxTokens}
 	}
 
-	if messages.TopP != nil && messages.Temperature != nil {
+	if messages.request.TopP != nil && messages.request.Temperature != nil {
 		return nil, &ErrConflictingOptions{Err: errors.New("top_p and temperature")}
 	}
 
 	// Load the conversation
-	messages.Messages = messages.conversation.Messages
+	messages.request.Messages = messages.conversation.Messages
 
-	jsonData, err := json.Marshal(messages)
+	jsonData, err := json.Marshal(messages.request)
 	if err != nil {
 		return nil, &ErrMarshalingInput{Err: err}
 	}
+	fmt.Println(string(jsonData))
 	resp, err := messages.claud.Do(messages.url, jsonData)
 	if err != nil {
 		return nil, err
@@ -412,7 +390,7 @@ func (messages *Messages) Send() (*Response, error) {
 	}
 
 	// Reset the messages
-	messages.Messages = nil
+	messages.request.Messages = nil
 
 	return &reply, nil
 }
