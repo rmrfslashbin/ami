@@ -451,3 +451,22 @@ func (messages *Messages) Save() error {
 
 	return nil
 }
+
+// Reset the conversation
+func (messages *Messages) Reset(modelName *string) {
+	// Change the model if needed
+	if modelName != nil {
+		model := claude.ModelsList[*modelName]
+		messages.request.Model = model.Name
+		messages.request.MaxTokens = model.MaxOutputTokens
+		messages.request.modelMaxTokens = model.MaxOutputTokens
+	}
+
+	// Reset the messages
+	messages.conversation.Messages = nil
+}
+
+// GetModel returns the model name.
+func (messages *Messages) GetModel() string {
+	return messages.request.Model
+}
