@@ -43,6 +43,7 @@ type ErrHTTP struct {
 	Msg        string
 	URL        string
 	Data       *[]byte
+	Body       *[]byte
 	StatusCode int
 }
 

@@ -226,13 +226,13 @@ func (messages *Messages) AddTool(tool *Tool) {
 	messages.request.Tools = append(messages.request.Tools, tool)
 }
 
-func (messages *Messages) GetMessageJSON() (*[]byte, error) {
-	jsonData, err := json.Marshal(messages.request)
-	if err != nil {
-		return nil, &ErrMarshalingInput{Err: err}
-	}
-	return &jsonData, nil
+func (messages *Messages) GetMessageRequest() *Request {
+	return &messages.request
 
+}
+
+func (messages *Messages) GetConversation() *Conversation {
+	return messages.conversation
 }
 
 type StreamResults struct {
@@ -381,12 +381,10 @@ func (messages *Messages) Send() (*Response, error) {
 		return nil, &ErrMarshalingReply{Err: err}
 	}
 
-	for _, content := range reply.Content {
-		messages.conversation.Messages = append(
-			messages.conversation.Messages,
-			&Message{Role: "assistant", MessageContent: []*Content{{Type: "text", Text: content.Text}}},
-		)
-	}
+	messages.conversation.Messages = append(
+		messages.conversation.Messages,
+		&Message{Role: reply.Role, MessageContent: reply.Content},
+	)
 
 	// Reset the messages
 	messages.request.Messages = nil

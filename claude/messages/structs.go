@@ -139,6 +139,9 @@ type Response struct {
 	// For Messages, this is always "message".
 	Type string `json:"type"`
 
+	// Error is the error message.
+	Error Error `json:"error,omitempty"`
+
 	// Conversational role of the generated message.
 	// Required.
 	// This will always be "assistant".
@@ -259,8 +262,10 @@ type StreamingMessageStop struct {
 
 type StreamingMessageError struct {
 	Type  string `json:"type"`
-	Error struct {
-		Type    string `json:"type"`
-		Message string `json:"message"`
-	} `json:"error"`
+	Error Error  `json:"error"`
+}
+
+type Error struct {
+	Type    string `json:"type"`
+	Message string `json:"message"`
 }

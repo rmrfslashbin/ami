@@ -158,17 +158,18 @@ func (c *Claude) Do(url string, jsonData []byte) (*[]byte, error) {
 
 	defer resp.Body.Close()
 
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, &ErrHTTP{
 			StatusCode: resp.StatusCode,
 			URL:        url,
 			Data:       &jsonData,
+			Body:       &responseBody,
 		}
-	}
-
-	responseBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
 	}
 
 	return &responseBody, nil
