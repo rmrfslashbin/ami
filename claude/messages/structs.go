@@ -1,12 +1,15 @@
 package messages
 
 import (
+	"reflect"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/invopop/jsonschema"
 )
 
-// Conversation is a conversation.
+// Conversation represents a conversation. This is not part of the API.
 type Conversation struct {
 	// Id is the unique object identifier.
 	Id string `json:"id"`
@@ -30,18 +33,15 @@ type Request struct {
 	// Model is the model that will complete your prompt.
 	// Required.
 	// See models (https://docs.anthropic.com/claude/docs/models-overview) for additional details and options.
-	Model string `json:"model"`
+	Model string `json:"model" required:"true" enum:"haiku,sonnet,opus"`
 
 	// Messages is the messages to send to the API.
 	// Required.
-	Messages []*Message `json:"messages"`
-
-	// System is a system prompt is a way of providing context and instructions to Claude, such as specifying a particular goal or role.
-	System string `json:"system,omitempty"`
+	Messages []*Message `json:"messages" required:"true"`
 
 	// MaxToken is the maximum number of tokens to generate before stopping.
 	// Required.
-	MaxTokens int `json:"max_tokens"`
+	MaxTokens int `json:"max_tokens" required:"true"`
 
 	// Metadata is an object describing metadata about the request.
 	Metadata *Metadata `json:"metadata,omitempty"`
@@ -53,20 +53,26 @@ type Request struct {
 	// Default is false.
 	Stream bool `json:"stream"`
 
+	// System is a system prompt is a way of providing context and instructions to Claude, such as specifying a particular goal or role.
+	System string `json:"system,omitempty"`
+
 	// Temperature is a float that controls the randomness of the model's output. The higher the temperature, the more random the output.
 	Temperature *float32 `json:"temperature,omitempty"`
 
+	// ToolChoice is a tool choice.
+	ToolChoice *ToolChoice `json:"tool_choice,omitempty" enum:"auto,any,tool"`
+
 	// Tools are definitions of tools that the model may use
 	Tools []*Tool `json:"tools,omitempty"`
+
+	// TopK is an integer that specifies sampling from the top K options for each subsequent token.
+	// Recommended for advanced use cases only. You usually only need to use temperature.
+	TopK *int `json:"top_k,omitempty"`
 
 	// TopP is an integer that controls nucleus sampling. The higher the top_p, the more diverse the output.
 	// Recommended for advanced use cases only. You usually only need to use temperature.
 	// You should either alter temperature or top_p, but not both.
 	TopP *int `json:"top_p,omitempty"`
-
-	// TopK is an integer that specifies sampling from the top K options for each subsequent token.
-	// Recommended for advanced use cases only. You usually only need to use temperature.
-	TopK *int `json:"top_k,omitempty"`
 
 	// modelMaxTokens is the maximum number of tokens for the model.
 	modelMaxTokens int
@@ -124,6 +130,12 @@ type MediaSource struct {
 
 	// Data is the base64 encoded data.
 	Data string `json:"data"`
+}
+
+// ToolChoice is a tool choice. The model can use a specific tool, any available tool, or decide by itself.
+type ToolChoice struct {
+	Type string `json:"type" enum:"auto,any,tool" required:"true"`
+	Name string `json:"name" require_if:"type=tool"`
 }
 
 // https://docs.anthropic.com/claude/reference/messages_post
@@ -268,4 +280,67 @@ type StreamingMessageError struct {
 type Error struct {
 	Type    string `json:"type"`
 	Message string `json:"message"`
+}
+
+// Validater is an interface for validating structs.
+type Validater interface {
+	Validate() error
+}
+
+// Validate validates the struct.
+func Validate(v Validater) error {
+	// reflect the struct and parse the tags
+	val := reflect.ValueOf(v)
+	for i := 0; i < val.NumField(); i++ {
+		requiredTag := val.Type().Field(i).Tag.Get("required")
+		enumTag := val.Type().Field(i).Tag.Get("enum")
+		requireIfTag := val.Type().Field(i).Tag.Get("require_if")
+
+		// check if the field is required
+		if requiredTag == "true" {
+			if val.Field(i).IsZero() {
+				return &ValidationError{Field: val.Type().Field(i).Name, Message: "is required"}
+			}
+		}
+
+		// check if the field is in the enum; the format of the enum field is "enum1,enum2,enum3"
+		if enumTag != "" {
+			enum := strings.Split(enumTag, ",")
+			if !slices.Contains(enum, val.Field(i).String()) {
+				return &ValidationError{Field: val.Type().Field(i).Name, Message: "is not in the enum"}
+			}
+		}
+
+		// check if the field is required if another field is set
+		if requireIfTag != "" {
+			// split the require_if tag
+
+			requireIfSplit := strings.Split(requireIfTag, "=")
+			requireIfField := requireIfSplit[0]
+			requireIfValue := requireIfSplit[1]
+
+			// if a value is set, the field is required
+			if val.FieldByName(requireIfField).String() == requireIfValue {
+				if val.Field(i).IsZero() {
+					return &ValidationError{Field: val.Type().Field(i).Name, Message: "is required"}
+				}
+			}
+		}
+	}
+
+	// call the struct's validate method
+	return v.Validate()
+}
+
+// Validate validates the Request struct.
+func (r *Request) Validate() error {
+	if r.MaxTokens > r.modelMaxTokens {
+		return &ValidationError{Field: "max_tokens", Message: "cannot be greater than the model's max tokens"}
+	}
+
+	if r.TopP != nil && r.Temperature != nil {
+		return &ValidationError{Field: "top_p and temperature", Message: "cannot both be set"}
+	}
+
+	return nil
 }

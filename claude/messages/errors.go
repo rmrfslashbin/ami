@@ -253,3 +253,13 @@ func (e *ErrToolUseNotSupported) Error() string {
 	}
 	return e.Msg
 }
+
+type ValidationError struct {
+	Field   string
+	Message string
+	Err     error
+}
+
+func (e *ValidationError) Error() string {
+	return e.Field + " " + e.Message
+}

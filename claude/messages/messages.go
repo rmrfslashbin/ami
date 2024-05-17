@@ -354,12 +354,8 @@ func (messages *Messages) Stream(ctx context.Context) StreamResults {
 }
 
 func (messages *Messages) Send() (*Response, error) {
-	if messages.request.MaxTokens > messages.request.modelMaxTokens {
-		return nil, &ErrMaxTokensExceeded{Model: messages.request.Model, MaxTokens: messages.request.MaxTokens}
-	}
-
-	if messages.request.TopP != nil && messages.request.Temperature != nil {
-		return nil, &ErrConflictingOptions{Err: errors.New("top_p and temperature")}
+	if err := messages.request.Validate(); err != nil {
+		return nil, err
 	}
 
 	// Load the conversation
@@ -426,10 +422,13 @@ func (messages *Messages) Load() error {
 	return nil
 }
 
+// Save the conversation
 func (messages *Messages) Save() error {
+	// if no file path is set, return
 	if messages.conversationFqpn == nil {
 		return nil
 	}
+
 	// Create the file
 	file, err := os.Create(*messages.conversationFqpn)
 	if err != nil {
