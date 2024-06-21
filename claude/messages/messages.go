@@ -113,6 +113,10 @@ func WithHaiku() Option {
 	return withModel("haiku")
 }
 
+func WithSonnet35() Option {
+	return withModel("sonnet35")
+}
+
 func withModel(model string) Option {
 	return func(config *Messages) {
 		model := claude.ModelsList[model]
