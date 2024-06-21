@@ -18,7 +18,6 @@ import (
 
 const MODULE_NAME = "claude"
 const ANTHROPIC_VERSION = "2023-06-01"
-const ANTHROPIC_BETA = "tools-2024-04-04"
 const URL = "https://api.anthropic.com"
 
 // headers:
@@ -73,6 +72,10 @@ var ModelsList = map[string]*Model{
 		Name:            "claude-3-haiku-20240307",
 		MaxOutputTokens: 4096,
 	},
+	"sonnet35": {
+		Name:            "claude-3-5-sonnet-20240620",
+		MaxOutputTokens: 4096,
+	},
 }
 
 type Option func(config *Claude)
@@ -102,7 +105,6 @@ func New(opts ...func(*Claude)) (*Claude, error) {
 	config.headers["x-api-key"] = *config.apikey
 	config.headers["content-type"] = "application/json"
 	config.headers["anthropic-version"] = ANTHROPIC_VERSION
-	config.headers["anthropic-beta"] = ANTHROPIC_BETA
 	return config, nil
 }
 

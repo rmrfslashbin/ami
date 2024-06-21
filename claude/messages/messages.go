@@ -226,6 +226,21 @@ func (messages *Messages) AddTool(tool *Tool) {
 	messages.request.Tools = append(messages.request.Tools, tool)
 }
 
+// SetToolChoiceAuto sets the tool choice to auto.
+func (messages *Messages) SetToolChoiceAuto() {
+	messages.request.ToolChoice = &ToolChoice{Type: "auto"}
+}
+
+// SetToolChoiceAny sets the tool choice to any.
+func (messages *Messages) SetToolChoiceAny() {
+	messages.request.ToolChoice = &ToolChoice{Type: "any"}
+}
+
+// SetToolChoiceTool sets the tool choice to a specific tool.
+func (messages *Messages) SetToolChoiceTool(tool string) {
+	messages.request.ToolChoice = &ToolChoice{Type: "tool", Name: tool}
+}
+
 func (messages *Messages) GetMessageRequest() *Request {
 	return &messages.request
 
