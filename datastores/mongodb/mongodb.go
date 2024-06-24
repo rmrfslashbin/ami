@@ -237,8 +237,10 @@ func (ds *DataStore) Inventory() (map[string]interface{}, error) {
 		recordType := result["_id"].(string)
 		count := result["count"].(int32)
 		fields := result["fields"].(primitive.A)
-		oldestRecord := result["oldest_record"].(time.Time)
-		newestRecord := result["newest_record"].(time.Time)
+
+		// Convert primitive.DateTime to time.Time
+		oldestRecord := result["oldest_record"].(primitive.DateTime).Time()
+		newestRecord := result["newest_record"].(primitive.DateTime).Time()
 
 		// Get a sample of field names
 		sampleFields := make(map[string]bool)
