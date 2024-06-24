@@ -317,7 +317,7 @@ func (ds *DataStore) Inventory() (map[string]interface{}, error) {
 
 	var results []bson.M
 	if err = cursor.All(context.Background(), &results); err != nil {
-		return nil, fmt.Errorf("failed to decode inventory results: %v", err)
+		return nil, &ErrFailedToDecodeInventoryResults{Err: err}
 	}
 
 	inventory := make(map[string]interface{})

@@ -274,3 +274,18 @@ func (e *ErrFailedToExecuteInventoryAggregation) Error() string {
 	}
 	return e.Msg
 }
+
+type ErrFailedToDecodeInventoryResults struct {
+	Err error
+	Msg string
+}
+
+func (e *ErrFailedToDecodeInventoryResults) Error() string {
+	if e.Msg != "" {
+		e.Msg = "failed to decode inventory results"
+	}
+	if e.Err != nil {
+		return e.Msg + ": " + e.Err.Error()
+	}
+	return e.Msg
+}
