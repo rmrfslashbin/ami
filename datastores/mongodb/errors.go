@@ -45,56 +45,6 @@ func (e *ErrFailedToConnectToMongoDB) Error() string {
 	return e.Msg
 }
 
-// failed to unmarshal request
-type ErrFailedToUnmarshalRequest struct {
-	Err error
-	Msg string
-}
-
-func (e *ErrFailedToUnmarshalRequest) Error() string {
-	if e.Msg != "" {
-		e.Msg = "failed to unmarshal request"
-	}
-	if e.Err != nil {
-		return e.Msg + ": " + e.Err.Error()
-	}
-	return e.Msg
-}
-
-type ErrActionMissingOrInvalid struct {
-	Err error
-	Msg string
-}
-
-func (e *ErrActionMissingOrInvalid) Error() string {
-	if e.Msg != "" {
-		e.Msg = "action is required and must be a string"
-	}
-	if e.Err != nil {
-		return e.Msg + ": " + e.Err.Error()
-	}
-	return e.Msg
-}
-
-type ErrActionUnknown struct {
-	Err    error
-	Msg    string
-	Action string
-}
-
-func (e *ErrActionUnknown) Error() string {
-	if e.Msg != "" {
-		e.Msg = "unknown action"
-	}
-	if e.Action != "" {
-		e.Msg = e.Msg + ": " + e.Action
-	}
-	if e.Err != nil {
-		return e.Msg + ": " + e.Err.Error()
-	}
-	return e.Msg
-}
-
 type ErrRecordTypeMissingOrInvalid struct {
 	Err error
 	Msg string

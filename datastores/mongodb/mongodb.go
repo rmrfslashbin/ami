@@ -2,8 +2,6 @@ package mongodb
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/rmrfslashbin/ami/datastores"
@@ -62,91 +60,6 @@ func WithDatabaseName(name string) Option {
 	return func(config *DataStore) {
 		config.databaseName = name
 	}
-}
-
-// GetClaudeToolSpec returns the Claude Tool specification as a blockquote string
-func (ds *DataStore) GetClaudeToolSpec() string {
-	spec := `{
-  "type": "function",
-  "function": {
-    "name": "data_store",
-    "description": "Interact with a persistent data store to create, read, update, and delete records, as well as search and retrieve inventory information.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "action": {
-          "type": "string",
-          "enum": ["create", "read", "update", "delete", "search", "inventory"],
-          "description": "The action to perform on the data store"
-        },
-        "record_type": {
-          "type": "string",
-          "description": "The type of record (e.g., 'person', 'company', 'product')"
-        },
-        "id": {
-          "type": "string",
-          "description": "The unique identifier of the record (required for read, update, and delete actions)"
-        },
-        "data": {
-          "type": "object",
-          "description": "The data to be stored or updated (required for create and update actions)"
-        },
-        "query": {
-          "type": "object",
-          "description": "The search query parameters (required for search action)"
-        },
-        "fields": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "Specific fields to update (optional for update action)"
-        }
-      },
-      "required": ["action"]
-    }
-  }
-}`
-	return fmt.Sprintf("> %s", spec)
-}
-
-// HandleRequest processes incoming requests from Claude
-func HandleRequest(db datastores.Database, input []byte) ([]byte, error) {
-	var request map[string]interface{}
-	err := json.Unmarshal(input, &request)
-	if err != nil {
-		return nil, &ErrFailedToUnmarshalRequest{Err: err}
-	}
-
-	action, ok := request["action"].(string)
-	if !ok {
-		return nil, &ErrActionMissingOrInvalid{}
-	}
-
-	var result interface{}
-
-	switch action {
-	case "create":
-		result, err = db.Create(request)
-	case "read":
-		result, err = db.Read(request)
-	case "update":
-		result, err = db.Update(request)
-	case "delete":
-		result, err = db.Delete(request)
-	case "search":
-		result, err = db.Search(request)
-	case "inventory":
-		result, err = db.Inventory()
-	default:
-		err = &ErrActionUnknown{Action: action}
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	return json.Marshal(result)
 }
 
 // Create creates a new record in the data store
@@ -293,7 +206,6 @@ func (ds *DataStore) Search(request map[string]interface{}) ([]datastores.Record
 	if err = cursor.All(context.Background(), &records); err != nil {
 		return nil, &ErrFailedToDecodeSearchResults{Err: err}
 	}
-
 	return records, nil
 }
 

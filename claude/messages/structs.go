@@ -106,8 +106,14 @@ type Content struct {
 	// Text is the text of the content.
 	Text string `json:"text,omitempty"`
 
+	// Content is the content of the content.
+	Content string `json:"content,omitempty"`
+
 	// Id is the unique object identifier for a tool_use block.
 	Id string `json:"id,omitempty"`
+
+	// ToolUseId is the unique object identifier for a tool_use block.
+	ToolUseId string `json:"tool_use_id,omitempty"`
 
 	// Input is the input request for a tool_use block.
 	Input interface{} `json:"input,omitempty"`
@@ -115,6 +121,7 @@ type Content struct {
 	// Name is the name of the tool used in a tool_use block.
 	Name string `json:"name,omitempty"`
 
+	// Source is the source of the media.
 	Source *MediaSource `json:"source,omitempty"`
 }
 

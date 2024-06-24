@@ -226,6 +226,23 @@ func (messages *Messages) AddRoleUserMedia(fqpn string, prompt string) error {
 	return nil
 }
 
+func (messages *Messages) AddRoleUserToolResult(toolUseId string, content string) error {
+	messages.conversation.Messages = append(
+		messages.conversation.Messages,
+		&Message{
+			Role: "user",
+			MessageContent: []*Content{
+				{
+					Type:      "tool_result",
+					ToolUseId: toolUseId,
+					Content:   content,
+				},
+			},
+		},
+	)
+	return nil
+}
+
 func (messages *Messages) AddTool(tool *Tool) {
 	messages.request.Tools = append(messages.request.Tools, tool)
 }
