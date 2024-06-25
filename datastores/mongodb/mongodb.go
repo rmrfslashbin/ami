@@ -74,7 +74,7 @@ func (ds *DataStore) Create(request map[string]interface{}) (*datastores.Record,
 		return nil, &ErrDataMissingOrInvalid{}
 	}
 
-	now := time.Now()
+	now := time.Now().UTC() // Use UTC time
 	record := &datastores.Record{
 		RecordType: recordType,
 		Data:       data,
@@ -196,7 +196,31 @@ func (ds *DataStore) Search(request map[string]interface{}) ([]datastores.Record
 		return nil, &ErrQueryMissingOrInvalid{}
 	}
 
-	cursor, err := ds.db.Collection("records").Find(context.Background(), query)
+	// Handle date-based queries
+	if createdAt, ok := query["created_at"].(map[string]interface{}); ok {
+		for op, value := range createdAt {
+			if timeStr, ok := value.(string); ok {
+				t, err := time.Parse(time.RFC3339, timeStr)
+				if err != nil {
+					return nil, &ErrInvalidDateFormat{Field: "created_at", Err: err}
+				}
+				createdAt[op] = t
+			}
+		}
+		query["created_at"] = createdAt
+	}
+
+	// Construct the final query
+	finalQuery := bson.M{}
+	for key, value := range query {
+		if key == "record_type" {
+			finalQuery[key] = value
+		} else {
+			finalQuery["data."+key] = value
+		}
+	}
+
+	cursor, err := ds.db.Collection("records").Find(context.Background(), finalQuery)
 	if err != nil {
 		return nil, &ErrFailedToSearchRecords{Err: err}
 	}

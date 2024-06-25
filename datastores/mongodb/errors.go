@@ -239,3 +239,22 @@ func (e *ErrFailedToDecodeInventoryResults) Error() string {
 	}
 	return e.Msg
 }
+
+type ErrInvalidDateFormat struct {
+	Err   error
+	Msg   string
+	Field string
+}
+
+func (e *ErrInvalidDateFormat) Error() string {
+	if e.Msg != "" {
+		e.Msg = "invalid date format"
+	}
+	if e.Field != "" {
+		e.Msg = e.Msg + " for " + e.Field
+	}
+	if e.Err != nil {
+		return e.Msg + ": " + e.Err.Error()
+	}
+	return e.Msg
+}
