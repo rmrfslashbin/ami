@@ -12,7 +12,7 @@ type Request struct {
 
 type Response struct {
 	Errors       *ResponseErrors `json:"errors,omitempty"`
-	Image        *string         `json:"-"`
+	Image        *string         `json:"image,omitempty"`
 	FinishReason *string         `json:"finish_reason,omitempty"`
 	Seed         *int            `json:"seed,omitempty"`
 	Filename     *string         `json:"filename,omitempty"`
