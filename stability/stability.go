@@ -115,24 +115,16 @@ func (stability *Stability) Do(url *string, httpMethod HttpMethod) (*StabilityRe
 		return nil, err
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		return &StabilityResponse{
-			Errors: &responseBody,
-		}, nil
-	}
-
+	response := &StabilityResponse{}
+	response.StatusCode = resp.StatusCode
+	response.Body = responseBody
 	responseHeaders := map[string][]string{}
 
 	for key, value := range resp.Header {
 		responseHeaders[key] = value
 	}
 
-	if err != nil {
-		return nil, err
-	}
+	response.Headers = responseHeaders
 
-	return &StabilityResponse{
-		Body:    responseBody,
-		Headers: responseHeaders,
-	}, nil
+	return response, nil
 }

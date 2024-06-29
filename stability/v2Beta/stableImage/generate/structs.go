@@ -11,17 +11,15 @@ type Request struct {
 }
 
 type Response struct {
-	Metadata *ResponseMetadata `json:"data,omitempty"`
-	Errors   *ResponseErrors   `json:"errors,omitempty"`
-	Image    *[]byte           `json:"image,omitempty"`
+	Errors       *ResponseErrors `json:"errors,omitempty"`
+	Image        *string         `json:"-"`
+	FinishReason *string         `json:"finish_reason,omitempty"`
+	Seed         *int            `json:"seed,omitempty"`
+	Filename     *string         `json:"filename,omitempty"`
 }
 
-type ResponseMetadata struct {
-	ContextType  string `json:"context_type"`
-	FinishReason string `json:"finish_reason"`
-	Seed         int    `json:"seed"`
-}
 type ResponseErrors struct {
-	Name   string   `json:"name"`
-	Errors []string `json:"errors"`
+	Errors []string `json:"errors,omitempty"`
+	Id     string   `json:"id,omitempty"`
+	Name   string   `json:"name,omitempty"`
 }

@@ -1,7 +1,7 @@
 package stability
 
 type StabilityResponse struct {
-	Body    []byte              `json:"body,omitempty"`
-	Headers map[string][]string `json:"headers,omitempty"`
-	Errors  *[]byte             `json:"errors,omitempty"`
+	StatusCode int                 `json:"status_code,omitempty"`
+	Body       []byte              `json:"body,omitempty"`
+	Headers    map[string][]string `json:"headers,omitempty"`
 }

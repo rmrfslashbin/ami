@@ -161,3 +161,52 @@ func (e *ErrFetchingReturnHeader) Error() string {
 	}
 	return e.Msg
 }
+
+type ErrUnableToParseResponse struct {
+	Err      error
+	Msg      string
+	Response []byte
+}
+
+func (e *ErrUnableToParseResponse) Error() string {
+	if e.Msg != "" {
+		e.Msg = "unable to parse response"
+	}
+	if len(e.Response) > 0 {
+		e.Msg = e.Msg + ": " + string(e.Response)
+	}
+	if e.Err != nil {
+		return e.Msg + ": " + e.Err.Error()
+	}
+	return e.Msg
+}
+
+type ErrInvalidPromptLength struct {
+	Err error
+	Msg string
+}
+
+func (e *ErrInvalidPromptLength) Error() string {
+	if e.Msg != "" {
+		e.Msg = fmt.Sprintf("invalid prompt- use WithPrompt or SetPrompt to set it. Must be between 1 and %d characters", MAX_PROMPT_LENGTH)
+	}
+	if e.Err != nil {
+		return e.Msg + ": " + e.Err.Error()
+	}
+	return e.Msg
+}
+
+type ErrInvalidNegativePromptLength struct {
+	Err error
+	Msg string
+}
+
+func (e *ErrInvalidNegativePromptLength) Error() string {
+	if e.Msg != "" {
+		e.Msg = fmt.Sprintf("invalid negative prompt- use WithNegativePrompt or SetNegativePrompt to set it. If set, the prompt must be between 1 and %d characters", MAX_PROMPT_LENGTH)
+	}
+	if e.Err != nil {
+		return e.Msg + ": " + e.Err.Error()
+	}
+	return e.Msg
+}

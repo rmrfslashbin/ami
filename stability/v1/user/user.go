@@ -65,14 +65,6 @@ func (c *StableUser) Me() (*Response, error) {
 		return nil, &ErrEmptyResponse{}
 	}
 
-	if res.Errors != nil {
-		errors := &ResponseUserError{}
-		if err := json.Unmarshal(*res.Errors, errors); err != nil {
-			return nil, err
-		}
-		return &Response{Error: errors}, nil
-	}
-
 	userResponse := &ResponseUser{}
 	if err := json.Unmarshal(res.Body, userResponse); err != nil {
 		return nil, err
@@ -107,14 +99,6 @@ func (c *StableUser) Balance(input *BalanceInput) (*Response, error) {
 
 	if res == nil {
 		return nil, &ErrEmptyResponse{}
-	}
-
-	if res.Errors != nil {
-		errors := &ResponseUserError{}
-		if err := json.Unmarshal(*res.Errors, errors); err != nil {
-			return nil, err
-		}
-		return &Response{Error: errors}, nil
 	}
 
 	userBalanceResponse := &ResponseUserBalance{}
