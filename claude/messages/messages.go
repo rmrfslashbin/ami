@@ -1,21 +1,21 @@
 package messages
 
+// file: claude/messages/messages.go
+
 import (
-	"bytes"
-	"context"
 	"encoding/base64"
 	"encoding/gob"
 	"encoding/json"
 	"errors"
-	"net/http"
+	"fmt"
 	"os"
-	"path/filepath"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/rmrfslashbin/ami/claude"
-	"github.com/tmaxmax/go-sse"
+	"github.com/rs/xid"
 )
 
 // URL is the URL for the Messages API.
@@ -39,22 +39,23 @@ type Option func(config *Messages)
 type Messages struct {
 	claud            *claude.Claude
 	conversation     *Conversation
-	conversationFqpn *string
+	conversationFile string
 	url              string
+	mu               sync.Mutex
 
-	request Request
+	request MessageCreateParams
 }
 
 // New creates a new Messages configuration.
 func New(opts ...func(*Messages)) (*Messages, error) {
-	config := &Messages{}
-	config.request = Request{}
-
-	config.conversation = &Conversation{}
-	now := time.Now()
-	config.conversation.Created = now
-	config.conversation.Updated = now
-	config.url = URL
+	config := &Messages{
+		conversation: &Conversation{
+			ID:      xid.New().String(),
+			Created: time.Now(),
+			Updated: time.Now(),
+		},
+		url: URL,
+	}
 
 	// apply the list of options to Config
 	for _, opt := range opts {
@@ -69,15 +70,13 @@ func New(opts ...func(*Messages)) (*Messages, error) {
 		return nil, &ErrMissingModel{}
 	}
 
-	if config.conversationFqpn != nil {
-		err := config.Load()
-		if err != nil {
+	config.conversation.Model = config.request.Model
+
+	if config.conversationFile != "" {
+		err := config.LoadConversation()
+		if err != nil && !os.IsNotExist(err) {
 			return nil, err
 		}
-	}
-
-	if config.conversation.Model == nil {
-		config.conversation.Model = &config.request.Model
 	}
 
 	return config, nil
@@ -90,14 +89,10 @@ func WithClaude(claud *claude.Claude) Option {
 	}
 }
 
-func WithConversationFile(fpqn *string) Option {
-	if fpqn != nil {
-		return func(config *Messages) {
-			config.conversationFqpn = fpqn
-		}
-	}
+// WithConversationFile sets the file for storing the conversation.
+func WithConversationFile(file string) Option {
 	return func(config *Messages) {
-		config.conversation = &Conversation{}
+		config.conversationFile = file
 	}
 }
 
@@ -122,7 +117,6 @@ func withModel(model string) Option {
 		model := claude.ModelsList[model]
 		config.request.Model = model.Name
 		config.request.MaxTokens = model.MaxOutputTokens
-		config.request.modelMaxTokens = model.MaxOutputTokens
 	}
 }
 
@@ -132,63 +126,64 @@ func WithMaxTokens(n int) Option {
 	}
 }
 
-func (messages *Messages) SetStreaming(stream bool) {
-	messages.request.Stream = stream
+func (m *Messages) SetStreaming(stream bool) {
+	m.request.Stream = stream
 }
 
-// UserId sets the user id.
-func (messages *Messages) SetUserId(id string) {
-	messages.request.Metadata.UserId = id
-}
-
-func (messages *Messages) SetMaxTokens(n int) error {
-	if n > messages.request.MaxTokens {
-		return &ErrMaxTokensExceeded{Model: messages.request.Model, MaxTokens: messages.request.MaxTokens}
+// SetUserId sets the user id.
+func (m *Messages) SetUserId(id string) {
+	if m.request.Metadata == nil {
+		m.request.Metadata = &Metadata{}
 	}
-	messages.request.MaxTokens = n
+	m.request.Metadata.UserID = &id
+}
+
+func (m *Messages) SetMaxTokens(n int) error {
+	if n > m.request.MaxTokens {
+		return &ErrMaxTokensExceeded{Model: m.request.Model, MaxTokens: m.request.MaxTokens}
+	}
+	m.request.MaxTokens = n
 	return nil
 }
 
-func (messages *Messages) SetSystemPrompt(p string) {
-	messages.request.System = p
+func (m *Messages) SetSystemPrompt(p string) {
+	m.request.System = &p
 }
 
-func (messages *Messages) AddRoleAssistant(content string) {
-	messages.conversation.Messages = append(
-		messages.conversation.Messages,
-		&Message{
-			Role: "assistant",
-			MessageContent: []*Content{
-				{
-					Type: "text",
-					Text: content,
-				},
+func (m *Messages) AddMessage(role string, content string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	message := &Message{
+		Role: role,
+		Content: []ContentBlock{
+			{
+				Type: "text",
+				Text: &content,
 			},
 		},
-	)
+	}
+
+	// Validate the message before adding it
+	if err := m.validateMessage(message); err != nil {
+		return err
+	}
+
+	m.conversation.Messages = append(m.conversation.Messages, message)
+	m.conversation.Updated = time.Now()
+
+	return nil
 }
 
-func (messages *Messages) AddRoleUser(content string) {
-	/*
-		newMessage :=
-		messages.Messages = append(messages.Messages, newMessage)
-	*/
-
-	messages.conversation.Messages = append(
-		messages.conversation.Messages,
-		&Message{
-			Role: "user",
-			MessageContent: []*Content{
-				{
-					Type: "text",
-					Text: content,
-				},
-			},
-		},
-	)
+func (m *Messages) AddRoleAssistant(content string) error {
+	return m.AddMessage("assistant", content)
 }
 
-func (messages *Messages) AddRoleUserMedia(fqpn string, prompt string) error {
+func (m *Messages) AddRoleUser(content string) error {
+	return m.AddMessage("user", content)
+}
+
+func (m *Messages) AddRoleUserMedia(fqpn string, prompt string) error {
 	mtype, err := mimetype.DetectFile(fqpn)
 	if err != nil {
 		return &ErrFetchingMimeType{Err: err}
@@ -206,300 +201,247 @@ func (messages *Messages) AddRoleUserMedia(fqpn string, prompt string) error {
 	// Convert the file content to a base64-encoded string
 	base64Content := base64.StdEncoding.EncodeToString(content)
 
-	messages.conversation.Messages = append(
-		messages.conversation.Messages,
-		&Message{
-			Role: "user",
-			MessageContent: []*Content{
-				{
-					Type: "image",
-					Source: &MediaSource{
-						Type:      "base64",
-						MediaType: mtype.String(),
-						Data:      base64Content,
+	message := &Message{
+		Role: "user",
+		Content: []ContentBlock{
+			{
+				Type: "image",
+				Source: &ImageSource{
+					Type:      "base64",
+					MediaType: mtype.String(),
+					Data:      base64Content,
+				},
+			},
+			{
+				Type: "text",
+				Text: &prompt,
+			},
+		},
+	}
+
+	// Validate the message before adding it
+	if err := m.validateMessage(message); err != nil {
+		return err
+	}
+
+	m.conversation.Messages = append(m.conversation.Messages, message)
+	m.conversation.Updated = time.Now()
+	return nil
+}
+
+func (m *Messages) AddRoleUserToolResult(toolUseId string, content string) error {
+	message := &Message{
+		Role: "user",
+		Content: []ContentBlock{
+			{
+				Type:      "tool_result",
+				ToolUseID: &toolUseId,
+				Content: []ContentBlockContent{
+					{
+						Type: "text",
+						Text: &content,
 					},
 				},
-				{Type: "text", Text: prompt},
 			},
 		},
-	)
+	}
+	m.conversation.Messages = append(m.conversation.Messages, message)
+	m.conversation.Updated = time.Now()
 	return nil
 }
 
-func (messages *Messages) AddRoleUserToolResult(toolUseId string, content string) error {
-	messages.conversation.Messages = append(
-		messages.conversation.Messages,
-		&Message{
-			Role: "user",
-			MessageContent: []*Content{
-				{
-					Type:      "tool_result",
-					ToolUseId: toolUseId,
-					Content:   content,
-				},
-			},
-		},
-	)
-	return nil
-}
-
-func (messages *Messages) AddTool(tool *Tool) {
-	messages.request.Tools = append(messages.request.Tools, tool)
+func (m *Messages) AddTool(tool *ToolParam) {
+	m.request.Tools = append(m.request.Tools, tool)
 }
 
 // SetToolChoiceAuto sets the tool choice to auto.
-func (messages *Messages) SetToolChoiceAuto() {
-	messages.request.ToolChoice = &ToolChoice{Type: "auto"}
+func (m *Messages) SetToolChoiceAuto() {
+	m.request.ToolChoice = &ToolChoice{Type: "auto"}
 }
 
 // SetToolChoiceAny sets the tool choice to any.
-func (messages *Messages) SetToolChoiceAny() {
-	messages.request.ToolChoice = &ToolChoice{Type: "any"}
+func (m *Messages) SetToolChoiceAny() {
+	m.request.ToolChoice = &ToolChoice{Type: "any"}
 }
 
 // SetToolChoiceTool sets the tool choice to a specific tool.
-func (messages *Messages) SetToolChoiceTool(tool string) {
-	messages.request.ToolChoice = &ToolChoice{Type: "tool", Name: tool}
+func (m *Messages) SetToolChoiceTool(tool string) {
+	m.request.ToolChoice = &ToolChoice{Type: "tool", Name: &tool}
 }
 
-func (messages *Messages) GetMessageRequest() *Request {
-	return &messages.request
-
+func (m *Messages) GetMessageRequest() *MessageCreateParams {
+	return &m.request
 }
 
-func (messages *Messages) GetConversation() *Conversation {
-	return messages.conversation
+func (m *Messages) GetConversation() *Conversation {
+	return m.conversation
 }
 
-type StreamResults struct {
-	Response <-chan StreamingMessageResponse
-	Error    <-chan error
-}
-
-func (messages *Messages) Stream(ctx context.Context) StreamResults {
-	responseCh := make(chan StreamingMessageResponse)
-	errCh := make(chan error)
-
-	if len(messages.request.Tools) > 0 {
-		errCh <- &ErrToolUseNotSupported{}
-		close(responseCh)
-		return StreamResults{Response: responseCh, Error: errCh}
-	}
-
-	if messages.request.MaxTokens > messages.request.modelMaxTokens {
-		errCh <- &ErrMaxTokensExceeded{Model: messages.request.Model, MaxTokens: messages.request.MaxTokens}
-		close(responseCh)
-		return StreamResults{Response: responseCh, Error: errCh}
-	}
-
-	if messages.request.TopP != nil && messages.request.Temperature != nil {
-		errCh <- &ErrConflictingOptions{Err: errors.New("top_p and temperature")}
-		close(responseCh)
-		return StreamResults{Response: responseCh, Error: errCh}
-	}
-
-	// Load the conversation
-	messages.request.Messages = messages.conversation.Messages
-
-	jsonData, err := json.Marshal(messages.request)
-	if err != nil {
-		errCh <- &ErrMarshalingInput{Err: err}
-		close(responseCh)
-		return StreamResults{Response: responseCh, Error: errCh}
-	}
-
-	go func() {
-		defer close(responseCh)
-
-		//ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-		//defer cancel()
-
-		req, err := http.NewRequestWithContext(ctx, "POST", messages.url, bytes.NewBuffer(jsonData))
-		if err != nil {
-			errCh <- err
-			return
+func (m *Messages) Send() (*Message, error) {
+	// Validate all messages in the conversation
+	for _, msg := range m.conversation.Messages {
+		if err := m.validateMessage(msg); err != nil {
+			return nil, err
 		}
-
-		// Set headers
-		for key, value := range messages.claud.GetHeaders() {
-			req.Header.Set(key, value)
-		}
-
-		conn := sse.DefaultClient.NewConnection(req)
-
-		conn.SubscribeEvent("message_start", func(event sse.Event) {
-			var response StreamingMessageStart
-			err := json.Unmarshal([]byte(event.Data), &response)
-			if err != nil {
-				errCh <- &ErrMarshalingReply{Err: err}
-				return
-			}
-			responseCh <- StreamingMessageResponse{MessageStart: &response}
-		})
-		conn.SubscribeEvent("content_block_delta", func(event sse.Event) {
-			var response StreamingMessageContentBlockDelta
-			err := json.Unmarshal([]byte(event.Data), &response)
-			if err != nil {
-				errCh <- &ErrMarshalingReply{Err: err}
-				return
-			}
-			responseCh <- StreamingMessageResponse{ContentBlock: &response}
-		})
-
-		conn.SubscribeEvent("message_delta", func(event sse.Event) {
-			var response StreamingMessageStop
-			err := json.Unmarshal([]byte(event.Data), &response)
-			if err != nil {
-				errCh <- &ErrMarshalingReply{Err: err}
-				return
-			}
-			responseCh <- StreamingMessageResponse{MessageStop: &response}
-			close(responseCh)
-		})
-
-		conn.SubscribeEvent("error", func(event sse.Event) {
-			var response StreamingMessageError
-			err := json.Unmarshal([]byte(event.Data), &response)
-			if err != nil {
-				errCh <- &ErrMarshalingReply{Err: err}
-				return
-			}
-			responseCh <- StreamingMessageResponse{StreamingError: &response}
-			errCh <- &ErrStreamingMessage{}
-		})
-
-		// noops for now
-		conn.SubscribeEvent("ping", func(event sse.Event) {})
-		conn.SubscribeEvent("content_block_start", func(event sse.Event) {})
-		conn.SubscribeEvent("content_block_stop", func(event sse.Event) {})
-		conn.SubscribeEvent("message_stop", func(event sse.Event) {})
-
-		if err := conn.Connect(); err != nil {
-			/*
-				log.LogAttrs(context.TODO(), slog.LevelError,
-					"error connecting to streaming service",
-					slog.String("error", err.Error()))
-			*/
-			errCh <- err
-			return
-		}
-
-	}()
-
-	return StreamResults{Response: responseCh, Error: errCh}
-}
-
-func (messages *Messages) Send() (*Response, error) {
-	if err := messages.request.Validate(); err != nil {
-		return nil, err
 	}
 
-	// Load the conversation
-	messages.request.Messages = messages.conversation.Messages
+	// Convert conversation messages to MessageParams
+	m.request.Messages = convertToMessageParams(m.conversation.Messages)
 
-	jsonData, err := json.Marshal(messages.request)
+	jsonData, err := json.Marshal(m.request)
 	if err != nil {
 		return nil, &ErrMarshalingInput{Err: err}
 	}
 
-	resp, err := messages.claud.Do(messages.url, jsonData)
+	resp, err := m.claud.Do(m.url, jsonData)
 	if err != nil {
 		return nil, err
 	}
 
-	var reply Response
+	var reply Message
 	err = json.Unmarshal(*resp, &reply)
 	if err != nil {
 		return nil, &ErrMarshalingReply{Err: err}
 	}
 
-	messages.conversation.Messages = append(
-		messages.conversation.Messages,
-		&Message{Role: reply.Role, MessageContent: reply.Content},
-	)
+	m.conversation.Messages = append(m.conversation.Messages, &reply)
+	m.conversation.Updated = time.Now()
 
-	// Reset the messages
-	messages.request.Messages = nil
+	if m.conversationFile != "" {
+		err = m.SaveConversation()
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	return &reply, nil
 }
 
-func (messages *Messages) Load() error {
-	var err error
-	var fqpn string
-	fqpn, err = filepath.Abs(*messages.conversationFqpn)
+// validateMessage is a helper function to validate a single message
+func (m *Messages) validateMessage(msg *Message) error {
+	for _, block := range msg.Content {
+		if err := block.Validate(); err != nil {
+			return fmt.Errorf("invalid content block: %w", err)
+		}
+	}
+	return nil
+}
+
+func (m *Messages) LoadConversation() error {
+	file, err := os.Open(m.conversationFile)
 	if err != nil {
 		return err
 	}
-	messages.conversationFqpn = &fqpn
+	defer file.Close()
 
-	// Check if the file exists
-	_, err = os.Stat(fqpn)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return err
-		}
-	} else {
-		// Load the file
-		file, err := os.Open(fqpn)
-		if err != nil {
-			return &ErrOpeningFile{Err: err}
-		}
-		defer file.Close()
-
-		// Decode the GOB data
-		decoder := gob.NewDecoder(file)
-		err = decoder.Decode(messages.conversation)
-		if err != nil {
-			return &ErrLoadingGOB{Err: err}
-		}
-	}
-
-	return nil
+	decoder := gob.NewDecoder(file)
+	return decoder.Decode(m.conversation)
 }
 
-// Save the conversation
-func (messages *Messages) Save() error {
-	// if no file path is set, return
-	if messages.conversationFqpn == nil {
-		return nil
-	}
-
-	// Create the file
-	file, err := os.Create(*messages.conversationFqpn)
+func (m *Messages) SaveConversation() error {
+	file, err := os.Create(m.conversationFile)
 	if err != nil {
-		return &ErrOpeningFile{Err: err}
+		return err
 	}
 	defer file.Close()
 
-	now := time.Now()
-	messages.conversation.Updated = now
-
-	// Encode the GOB data
 	encoder := gob.NewEncoder(file)
-	err = encoder.Encode(messages.conversation)
-	if err != nil {
-		return &ErrSavingGOB{Err: err}
-	}
-
-	return nil
+	return encoder.Encode(m.conversation)
 }
 
-// Reset the conversation
-func (messages *Messages) Reset(modelName *string) {
-	// Change the model if needed
-	if modelName != nil {
-		model := claude.ModelsList[*modelName]
-		messages.request.Model = model.Name
-		messages.request.MaxTokens = model.MaxOutputTokens
-		messages.request.modelMaxTokens = model.MaxOutputTokens
+func (m *Messages) ResetConversation() {
+	m.conversation = &Conversation{
+		ID:      xid.New().String(),
+		Model:   m.request.Model,
+		Created: time.Now(),
+		Updated: time.Now(),
 	}
-
-	// Reset the messages
-	messages.conversation.Messages = nil
 }
 
 // GetModel returns the model name.
-func (messages *Messages) GetModel() string {
-	return messages.request.Model
+func (m *Messages) GetModel() string {
+	return m.request.Model
+}
+
+func (c *ContentBlock) Validate() error {
+	switch c.Type {
+	case "text":
+		if c.Text == nil || *c.Text == "" {
+			return errors.New("text is required for text type content")
+		}
+	case "image":
+		if c.Source == nil {
+			return errors.New("source is required for image type content")
+		}
+		if err := c.Source.Validate(); err != nil {
+			return err
+		}
+	case "tool_use":
+		if c.ID == nil || c.Name == nil || c.Input == nil {
+			return errors.New("id, name, and input are required for tool_use type content")
+		}
+	case "tool_result":
+		if c.ToolUseID == nil || len(c.Content) == 0 {
+			return errors.New("tool_use_id and content are required for tool_result type content")
+		}
+		for _, content := range c.Content {
+			if err := content.Validate(); err != nil {
+				return err
+			}
+		}
+	default:
+		return fmt.Errorf("invalid content type: %s", c.Type)
+	}
+	return nil
+}
+
+func (is *ImageSource) Validate() error {
+	if is == nil {
+		return errors.New("image source cannot be nil")
+	}
+	if is.Type != "base64" {
+		return errors.New("only base64 type is supported for image source")
+	}
+	validMediaTypes := []string{"image/jpeg", "image/png", "image/gif", "image/webp"}
+	if !slices.Contains(validMediaTypes, is.MediaType) {
+		return fmt.Errorf("invalid media type: %s", is.MediaType)
+	}
+	if is.Data == "" {
+		return errors.New("data is required for image source")
+	}
+	return nil
+}
+
+func (trc *ContentBlockContent) Validate() error {
+	if trc == nil {
+		return errors.New("content block content cannot be nil")
+	}
+	switch trc.Type {
+	case "text":
+		if trc.Text == nil || *trc.Text == "" {
+			return errors.New("text is required for text type tool result content")
+		}
+	case "image":
+		if trc.Source == nil {
+			return errors.New("source is required for image type tool result content")
+		}
+		if err := trc.Source.Validate(); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("invalid tool result content type: %s", trc.Type)
+	}
+	return nil
+}
+
+// convertToMessageParams converts []*Message to []MessageParam
+func convertToMessageParams(messages []*Message) []MessageParam {
+	params := make([]MessageParam, len(messages))
+	for i, msg := range messages {
+		params[i] = MessageParam{
+			Role:    msg.Role,
+			Content: msg.Content,
+		}
+	}
+	return params
 }

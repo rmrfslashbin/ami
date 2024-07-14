@@ -1,5 +1,7 @@
 package messages
 
+// file: claude/messages/errors.go
+
 import "fmt"
 
 type ErrMissingClaude struct {

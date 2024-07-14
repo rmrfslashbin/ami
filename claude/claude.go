@@ -4,55 +4,16 @@ package claude
 
 import (
 	"bytes"
-	"context"
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
 
-	"github.com/davecgh/go-spew/spew"
-	"github.com/tmaxmax/go-sse"
+	"github.com/rmrfslashbin/ami"
 )
 
 const MODULE_NAME = "claude"
-const ANTHROPIC_VERSION = "2023-06-01"
+const ANTHROPIC_VERSION = ami.APIVersion
 const URL = "https://api.anthropic.com"
-
-// headers:
-// x-api-key: YOUR_API_KEY"
-// content-type: application/json
-// anthropic-version: 2023-06-01
-
-/* https://docs.anthropic.com/claude/reference/errors
-Our API follows a predictable HTTP error code format:
-
-400 - invalid_request_error: There was an issue with the format or content of your request.
-401 - authentication_error: There's an issue with your API key.
-403 - permission_error: Your API key does not have permission to use the specified resource.
-404 - not_found_error: The requested resource was not found.
-429 - rate_limit_error: Your account has hit a rate limit.
-500 - api_error: An unexpected error has occurred internal to Anthropic's systems.
-529 - overloaded_error: Anthropic's API is temporarily overloaded.
-*/
-
-/* https://docs.anthropic.com/claude/reference/errors
-{
-  "type": "error",
-  "error": {
-    "type": "not_found_error",
-    "message": "The requested resource could not be found."
-  }
-}
-*/
-
-/*
-Model	        | API Name
-Claude 3 Opus	| claude-3-opus-20240229
-Claude 3 Sonnet	| claude-3-sonnet-20240229
-Claude 3 Haiku	| claude-3-haiku-20240307
-*/
 
 type Model struct {
 	Name            string `json:"name"`
@@ -177,6 +138,7 @@ func (c *Claude) Do(url string, jsonData []byte) (*[]byte, error) {
 	return &responseBody, nil
 }
 
+/*
 func (c *Claude) Stream(url string, jsonData []byte) (*[]byte, error) {
 	log := c.log.With(
 		slog.Group("function_info",
@@ -214,3 +176,4 @@ func (c *Claude) Stream(url string, jsonData []byte) (*[]byte, error) {
 
 	return nil, nil
 }
+*/

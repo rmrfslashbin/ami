@@ -1,6 +1,6 @@
 module github.com/rmrfslashbin/ami
 
-go 1.22.1
+go 1.22
 
 require (
 	github.com/gabriel-vasile/mimetype v1.4.4
@@ -17,6 +17,7 @@ require (
 
 require (
 	github.com/davecgh/go-spew v1.1.1
+	github.com/rs/xid v1.5.0
 	github.com/tmaxmax/go-sse v0.8.0
 	golang.org/x/net v0.26.0 // indirect
 )
