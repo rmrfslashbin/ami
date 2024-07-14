@@ -5,7 +5,6 @@ package claude
 import (
 	"bytes"
 	"io"
-	"log/slog"
 	"net/http"
 
 	"github.com/rmrfslashbin/ami"
@@ -44,7 +43,6 @@ type Option func(config *Claude)
 // Configuration structure.
 type Claude struct {
 	apikey  *string
-	log     *slog.Logger
 	headers map[string]string
 }
 
@@ -72,17 +70,6 @@ func New(opts ...func(*Claude)) (*Claude, error) {
 func WithAPIKey(apikey string) Option {
 	return func(config *Claude) {
 		config.apikey = &apikey
-	}
-}
-
-func WithLogger(log *slog.Logger) Option {
-	return func(config *Claude) {
-		moduleLogger := log.With(
-			slog.Group("module_info",
-				slog.String("module", MODULE_NAME),
-			),
-		)
-		config.log = moduleLogger
 	}
 }
 
@@ -137,43 +124,3 @@ func (c *Claude) Do(url string, jsonData []byte) (*[]byte, error) {
 
 	return &responseBody, nil
 }
-
-/*
-func (c *Claude) Stream(url string, jsonData []byte) (*[]byte, error) {
-	log := c.log.With(
-		slog.Group("function_info",
-			slog.String("function", "claude/claude.go/Stream()"),
-		),
-	)
-
-	log.LogAttrs(context.TODO(), slog.LevelError, "Streaming!")
-
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return nil, err
-	}
-
-	// Set headers
-	for key, value := range c.headers {
-		req.Header.Set(key, value)
-	}
-
-	conn := sse.DefaultClient.NewConnection(req)
-
-	conn.SubscribeToAll(func(event sse.Event) {
-		spew.Dump(event)
-	})
-
-	if err := conn.Connect(); err != nil {
-		log.LogAttrs(context.TODO(), slog.LevelError,
-			"error connecting to streaming service",
-			slog.String("error", err.Error()))
-		return nil, err
-	}
-
-	return nil, nil
-}
-*/
