@@ -15,6 +15,16 @@
 # Go workspace file
 go.work
 
+# Go sum files
+*.sum
+
+# Dependency directories
+vendor/
+
+# Output directories
+/bin/
+/pkg/
+
 ### Linux ###
 *~
 
@@ -32,6 +42,7 @@ go.work
 
 ### macOS ###
 .DS_Store
+.DS_Store?
 .AppleDouble
 .LSOverride
 Icon
@@ -70,6 +81,9 @@ Temporary Items
 .history
 .ionide
 
+# VSCode workspace files
+*.code-workspace
+
 ### Images ###
 *.jpg
 *.jpeg
@@ -103,3 +117,25 @@ Temporary Items
 *.ico
 *.3dm
 *.max
+
+### General ###
+*.log
+*.env
+
+### Dependency Management ###
+# Uncomment if you use dep
+# Gopkg.lock
+# Gopkg.toml
+
+### Temporary Files ###
+*.tmp
+*.temp
+tmp/
+temp/
+
+### JSON Files ###
+*.json
+
+### JSON Files to exclude from exclusion###
+#!config.json
+#!package.json
