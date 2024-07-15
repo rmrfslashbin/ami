@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sync"
 
 	"github.com/tmaxmax/go-sse"
 )
@@ -34,32 +35,70 @@ func (e ContentBlockStartEvent) Type() string {
 	return "content_block_start"
 }
 
+// StreamResults is a struct that contains the response and error channels for the streaming API
 type StreamResults struct {
 	Response <-chan StreamEvent
 	Error    <-chan error
 }
 
+// errorBuffer is a helper struct to manage multiple errors
+type errorBuffer struct {
+	errors []error
+	mu     sync.Mutex
+}
+
+func (eb *errorBuffer) add(err error) {
+	eb.mu.Lock()
+	defer eb.mu.Unlock()
+	eb.errors = append(eb.errors, err)
+}
+
+func (eb *errorBuffer) get() []error {
+	eb.mu.Lock()
+	defer eb.mu.Unlock()
+	return eb.errors
+}
+
 func (m *Messages) Stream(ctx context.Context) StreamResults {
 	eventCh := make(chan StreamEvent)
 	errCh := make(chan error)
+	errBuf := &errorBuffer{}
 
 	if len(m.request.Tools) > 0 {
-		errCh <- &ErrToolUseNotSupported{}
+		errBuf.add(&ErrToolUseNotSupported{})
 		close(eventCh)
+		go func() {
+			for _, err := range errBuf.get() {
+				errCh <- err
+			}
+			close(errCh)
+		}()
 		return StreamResults{Response: eventCh, Error: errCh}
 	}
 
 	if m.request.TopP != nil && m.request.Temperature != nil {
-		errCh <- &ErrConflictingOptions{Err: errors.New("top_p and temperature cannot be used together")}
+		errBuf.add(&ErrConflictingOptions{Err: errors.New("top_p and temperature cannot be used together")})
 		close(eventCh)
+		go func() {
+			for _, err := range errBuf.get() {
+				errCh <- err
+			}
+			close(errCh)
+		}()
 		return StreamResults{Response: eventCh, Error: errCh}
 	}
 
 	// Validate all messages in the conversation
 	for _, msg := range m.conversation.Messages {
 		if err := m.validateMessage(msg); err != nil {
-			errCh <- fmt.Errorf("invalid message in conversation: %w", err)
+			errBuf.add(fmt.Errorf("invalid message in conversation: %w", err))
 			close(eventCh)
+			go func() {
+				for _, err := range errBuf.get() {
+					errCh <- err
+				}
+				close(errCh)
+			}()
 			return StreamResults{Response: eventCh, Error: errCh}
 		}
 	}
@@ -69,8 +108,14 @@ func (m *Messages) Stream(ctx context.Context) StreamResults {
 
 	jsonData, err := json.Marshal(m.request)
 	if err != nil {
-		errCh <- &ErrMarshalingInput{Err: err}
+		errBuf.add(&ErrMarshalingInput{Err: err})
 		close(eventCh)
+		go func() {
+			for _, err := range errBuf.get() {
+				errCh <- err
+			}
+			close(errCh)
+		}()
 		return StreamResults{Response: eventCh, Error: errCh}
 	}
 
@@ -84,7 +129,10 @@ func (m *Messages) Stream(ctx context.Context) StreamResults {
 
 		req, err := http.NewRequestWithContext(streamCtx, "POST", m.url, bytes.NewBuffer(jsonData))
 		if err != nil {
-			errCh <- err
+			errBuf.add(err)
+			for _, err := range errBuf.get() {
+				errCh <- err
+			}
 			return
 		}
 
@@ -105,7 +153,7 @@ func (m *Messages) Stream(ctx context.Context) StreamResults {
 			var response MessageStartEvent
 			err := json.Unmarshal([]byte(event.Data), &response)
 			if err != nil {
-				errCh <- &ErrMarshalingReply{Err: err}
+				errBuf.add(&ErrMarshalingReply{Err: err})
 				return
 			}
 			eventCh <- response
@@ -115,7 +163,7 @@ func (m *Messages) Stream(ctx context.Context) StreamResults {
 			var response ContentBlockStartEvent
 			err := json.Unmarshal([]byte(event.Data), &response)
 			if err != nil {
-				errCh <- &ErrMarshalingReply{Err: err}
+				errBuf.add(&ErrMarshalingReply{Err: err})
 				return
 			}
 			eventCh <- response
@@ -125,7 +173,7 @@ func (m *Messages) Stream(ctx context.Context) StreamResults {
 			var response ContentBlockDeltaEvent
 			err := json.Unmarshal([]byte(event.Data), &response)
 			if err != nil {
-				errCh <- &ErrMarshalingReply{Err: err}
+				errBuf.add(&ErrMarshalingReply{Err: err})
 				return
 			}
 			eventCh <- response
@@ -135,7 +183,7 @@ func (m *Messages) Stream(ctx context.Context) StreamResults {
 			var response MessageDeltaEvent
 			err := json.Unmarshal([]byte(event.Data), &response)
 			if err != nil {
-				errCh <- &ErrMarshalingReply{Err: err}
+				errBuf.add(&ErrMarshalingReply{Err: err})
 				return
 			}
 			eventCh <- response
@@ -145,7 +193,7 @@ func (m *Messages) Stream(ctx context.Context) StreamResults {
 			var response MessageStopEvent
 			err := json.Unmarshal([]byte(event.Data), &response)
 			if err != nil {
-				errCh <- &ErrMarshalingReply{Err: err}
+				errBuf.add(&ErrMarshalingReply{Err: err})
 				return
 			}
 			eventCh <- response
@@ -155,11 +203,11 @@ func (m *Messages) Stream(ctx context.Context) StreamResults {
 			var response StreamingErrorEvent
 			err := json.Unmarshal([]byte(event.Data), &response)
 			if err != nil {
-				errCh <- &ErrMarshalingReply{Err: err}
+				errBuf.add(&ErrMarshalingReply{Err: err})
 				return
 			}
 			eventCh <- response
-			errCh <- &ErrStreamingMessage{Err: errors.New(response.Error.Message)}
+			errBuf.add(&ErrStreamingMessage{Err: errors.New(response.Error.Message)})
 		})
 
 		conn.SubscribeEvent("ping", func(event sse.Event) {
@@ -171,8 +219,12 @@ func (m *Messages) Stream(ctx context.Context) StreamResults {
 				// The context was cancelled, so this isn't an unexpected error
 				return
 			}
+			errBuf.add(err)
+		}
+
+		// Send all buffered errors
+		for _, err := range errBuf.get() {
 			errCh <- err
-			return
 		}
 	}()
 
