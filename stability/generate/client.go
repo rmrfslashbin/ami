@@ -1,6 +1,6 @@
-package stability
+package generate
 
-// file: ami/stability/client.go
+// file: stability/generate/client.go
 
 import (
 	"bytes"

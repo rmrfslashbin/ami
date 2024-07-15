@@ -1,6 +1,6 @@
-package stability
+package generate
 
-// file: ami/stability/models.go
+// file: stability/generate/models.go
 
 import (
 	"fmt"

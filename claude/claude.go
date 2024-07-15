@@ -1,6 +1,6 @@
 package claude
 
-// path: claude/claude.go
+// file: claude/claude.go
 
 import (
 	"bytes"
@@ -11,7 +11,7 @@ import (
 )
 
 const MODULE_NAME = "claude"
-const ANTHROPIC_VERSION = ami.APIVersion
+const ANTHROPIC_VERSION = ami.Anthropic_Version
 const URL = "https://api.anthropic.com"
 
 type Model struct {

@@ -1,5 +1,7 @@
 package main
 
+// file: examples/claude/StreamingMessage/main.go
+
 import (
 	"context"
 	"fmt"

@@ -1,5 +1,7 @@
 package claude
 
+// file: claude/errors.go
+
 import "fmt"
 
 type ErrMissingAPIKey struct {

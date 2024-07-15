@@ -1,5 +1,7 @@
 package main
 
+// file: examples/claude/BasicMessage/main.go
+
 import (
 	"fmt"
 	"os"

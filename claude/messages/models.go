@@ -1,6 +1,6 @@
 package messages
 
-// file: claude/messages/structs.go
+// file: claude/messages/models.go
 
 import (
 	"time"

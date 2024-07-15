@@ -1,6 +1,6 @@
-// File: examples/stability_generate/main.go
-
 package main
+
+// File: examples/stability/text2image/main.go
 
 import (
 	"encoding/base64"
@@ -8,7 +8,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/rmrfslashbin/ami/stability"
+	"github.com/rmrfslashbin/ami/stability/generate"
 )
 
 func main() {
@@ -17,17 +17,17 @@ func main() {
 		log.Fatal("STABILITY_API_KEY environment variable is not set")
 	}
 
-	client := stability.NewClient(
-		stability.WithAPIKey(apiKey),
-		stability.WithBaseURL("https://api.stability.ai"),
+	client := generate.NewClient(
+		generate.WithAPIKey(apiKey),
+		generate.WithBaseURL("https://api.stability.ai"),
 	)
 
 	// Example for Ultra endpoint
-	ultraParams, err := stability.NewGenerateParams(
-		stability.WithPrompt("A futuristic cityscape with flying cars"),
-		stability.WithAspectRatio("16:9"),
-		stability.WithSeed(12345),
-		stability.WithOutputFormat("png"),
+	ultraParams, err := generate.NewGenerateParams(
+		generate.WithPrompt("A futuristic cityscape with flying cars"),
+		generate.WithAspectRatio("16:9"),
+		generate.WithSeed(12345),
+		generate.WithOutputFormat("png"),
 	)
 	if err != nil {
 		log.Printf("Error creating Ultra parameters: %v", err)
@@ -41,11 +41,11 @@ func main() {
 	}
 
 	// Example for Core endpoint
-	coreParams, err := stability.NewGenerateParams(
-		stability.WithPrompt("A serene lake surrounded by mountains at sunset"),
-		stability.WithAspectRatio("16:9"),
-		stability.WithSeed(67890),
-		stability.WithOutputFormat("png"),
+	coreParams, err := generate.NewGenerateParams(
+		generate.WithPrompt("A serene lake surrounded by mountains at sunset"),
+		generate.WithAspectRatio("16:9"),
+		generate.WithSeed(67890),
+		generate.WithOutputFormat("png"),
 	)
 	if err != nil {
 		log.Printf("Error creating Core parameters: %v", err)
@@ -59,12 +59,12 @@ func main() {
 	}
 
 	// Example for SD3 endpoint
-	sd3Params, err := stability.NewGenerateParams(
-		stability.WithModel("sd3-large"),
-		stability.WithPrompt("A mystical forest with glowing fireflies"),
-		stability.WithAspectRatio("1:1"),
-		stability.WithSeed(54321),
-		stability.WithOutputFormat("png"),
+	sd3Params, err := generate.NewGenerateParams(
+		generate.WithModel("sd3-large"),
+		generate.WithPrompt("A mystical forest with glowing fireflies"),
+		generate.WithAspectRatio("1:1"),
+		generate.WithSeed(54321),
+		generate.WithOutputFormat("png"),
 	)
 	if err != nil {
 		log.Printf("Error creating SD3 parameters: %v", err)
@@ -78,7 +78,7 @@ func main() {
 	}
 }
 
-func saveImage(response *stability.GenerateResponse, filename string) {
+func saveImage(response *generate.GenerateResponse, filename string) {
 	fmt.Printf("Generation completed with finish reason: %s\n", response.FinishReason)
 	fmt.Printf("Seed used: %d\n", response.Seed)
 

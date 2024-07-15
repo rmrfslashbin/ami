@@ -1,6 +1,6 @@
-// File: ami/stability/errors.go
+package generate
 
-package stability
+// file: stability/generate/errors.go
 
 import "fmt"
 
