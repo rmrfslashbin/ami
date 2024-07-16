@@ -1,5 +1,7 @@
 package main
 
+// file: examples/stability/upscale/main.go
+
 import (
 	"encoding/base64"
 	"fmt"
