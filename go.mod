@@ -18,6 +18,7 @@ require (
 require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/rs/xid v1.5.0
+	github.com/sashabaranov/go-openai v1.26.3
 	github.com/tmaxmax/go-sse v0.8.0
 	golang.org/x/net v0.27.0 // indirect
 )
