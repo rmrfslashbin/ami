@@ -43,7 +43,7 @@ func WithBaseURL(baseURL string) ClientOption {
 	}
 }
 
-func NewClient(options ...ClientOption) *Client {
+func New(options ...ClientOption) *Client {
 	client := &Client{
 		HTTPClient: &http.Client{Timeout: 30 * time.Second},
 		BaseURL:    BaseURL,

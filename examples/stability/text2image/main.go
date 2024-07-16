@@ -17,7 +17,7 @@ func main() {
 		log.Fatal("STABILITY_API_KEY environment variable is not set")
 	}
 
-	client := generate.NewClient(
+	client := generate.New(
 		generate.WithAPIKey(apiKey),
 		generate.WithBaseURL("https://api.stability.ai"),
 	)
