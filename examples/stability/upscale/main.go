@@ -41,16 +41,45 @@ func main() {
 	// Calculate the project root directory (three levels up from the current file)
 	projectRoot := filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(filename))))
 
-	// Construct the path to the sample image
-	sampleImagePath := filepath.Join(projectRoot, "assets", "sample.jpg")
+	var sampleImagePath string
+
+	// Get an input filename from env variable
+	// If not set, use the default sample image
+	inputFilename := os.Getenv("INPUT_FILENAME")
+	if inputFilename == "" {
+		log.Println("INPUT_FILENAME not set. Using the default sample image.")
+		// Construct the path to the sample image
+		sampleImagePath = filepath.Join(projectRoot, "assets", "sample.jpg")
+	} else {
+		// Construct the path to the input image
+		var err error
+		sampleImagePath, err = filepath.Abs(inputFilename)
+		if err != nil {
+			log.Fatalf("Failed to get absolute path for input image: %v", err)
+		}
+	}
 
 	// Verify that the sample image exists
 	if _, err := os.Stat(sampleImagePath); os.IsNotExist(err) {
 		log.Fatalf("Sample image not found at %s", sampleImagePath)
 	}
 
+	var resultsDir string
+	// Construct the path to the results directory
+	results := os.Getenv("RESULTS_DIR")
+	if results == "" {
+		log.Println("RESULTS_DIR not set. Using the default results directory.")
+		resultsDir = filepath.Join(projectRoot, "assets", "results", "stability", "upscale")
+	} else {
+		// Construct the path to the results directory
+		var err error
+		resultsDir, err = filepath.Abs(results)
+		if err != nil {
+			log.Fatalf("Failed to get absolute path for results directory: %v", err)
+		}
+	}
+
 	// Ensure the results directory exists
-	resultsDir := filepath.Join(projectRoot, "assets", "results", "stability", "upscale")
 	if err := os.MkdirAll(resultsDir, 0755); err != nil {
 		log.Fatalf("Failed to create results directory: %v", err)
 	}
